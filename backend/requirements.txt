@@ -9,13 +9,14 @@ librosa>=0.10.0
 numpy>=1.24.0
 soundfile>=0.12.0
 
-# ML Transcription (optional)
-# basic-pitch>=0.3.0     # Spotify's AMT model
-# crepe>=0.1.0           # Pitch detection
-# torch>=2.0.0           # Required by basic-pitch & demucs
+# ML Transcription - Basic Pitch (Spotify AMT)
+basic-pitch>=0.4.0
+tensorflow>=2.16.0
+onnxruntime>=1.15.0
 
-# Audio separation (optional)
-# demucs>=4.0.0          # Meta's source separation
+# ML Transcription - CREPE (monophonic pitch tracking)
+crepe>=0.0.16
 
-# Sheet music generation
-# lilypond                # PDF generation from MusicXML
+# Audio separation - Demucs (Meta)
+demucs>=4.0.0
+torch>=2.0.0

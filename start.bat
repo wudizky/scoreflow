@@ -36,10 +36,11 @@ if not exist "web\node_modules" (
     cd ..
 )
 
-if not exist "backend\__pycache__" (
-    echo [2/3] 安装后端依赖...
+if not exist "backend\.venv" (
+    echo [2/3] 创建 Python 虚拟环境并安装依赖...
     cd backend
-    pip install -r requirements.txt
+    python -m venv .venv
+    call .venv\Scripts\pip install -r requirements.txt
     cd ..
 )
 

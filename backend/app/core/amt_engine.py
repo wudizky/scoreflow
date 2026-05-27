@@ -50,19 +50,31 @@ class AMTEngine:
 
     def _transcribe_basic_pitch(self, audio_path: str) -> list[dict]:
         """Use Spotify's Basic Pitch for AMT."""
-        import basic_pity
+        import pathlib
+        import basic_pitch.inference
+        import basic_pitch.note_creation
         import numpy as np
 
-        model_output, midi_data, note_events = basic_pity.infer(audio_path)
+        # Prefer ONNX model (compatible with newer TF versions)
+        model_dir = pathlib.Path(basic_pitch.__path__[0]) / "saved_models" / "icassp_2022"
+        model_path = model_dir / "nmp.onnx"
+        if not model_path.exists():
+            model_path = model_dir / "nmp"  # fallback to TF SavedModel
+
+        model_output, midi_data, note_events = basic_pitch.inference.predict(
+            audio_path, model_or_model_path=model_path
+        )
 
         notes = []
         for note in note_events:
+            # note = (start_time, end_time, pitch, amplitude, pitch_bends)
+            start_time, end_time, pitch, amplitude = note[0], note[1], note[2], note[3]
             notes.append({
-                "midi": int(note["midi_pitch"]),
-                "start": float(note["start_s"]),
-                "duration": float(note["duration_s"]),
-                "velocity": int(note.get("amplitude", 0.8) * 127),
-                "confidence": float(note.get("confidence", 1.0)),
+                "midi": int(pitch),
+                "start": float(start_time),
+                "duration": float(end_time - start_time),
+                "velocity": int(min(127, amplitude * 127)),
+                "confidence": float(min(1.0, amplitude)),
             })
         return notes
 
