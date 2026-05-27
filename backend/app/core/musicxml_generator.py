@@ -1,0 +1,153 @@
+"""MusicXML generator from note events."""
+
+from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.dom import minidom
+
+NOTE_NAMES = ["C", "D", "E", "F", "G", "A", "B"]
+ACCIDENTALS = {1: "#", 2: "##", -1: "-", -2: "--"}
+
+
+class MusicXMLGenerator:
+    """Generate MusicXML from note event data."""
+
+    def generate(self, notes: list[dict], output_path: str, instrument: str = "piano"):
+        """Generate MusicXML file from note events."""
+        root = Element("score-partwise", version="4.0")
+
+        # Part list
+        part_list = SubElement(root, "part-list")
+        score_part = SubElement(part_list, "score-part", id="P1")
+        part_name = SubElement(score_part, "part-name")
+        part_name.text = instrument.capitalize()
+
+        # Part
+        part = SubElement(root, "part", id="P1")
+
+        if not notes:
+            # Empty measure
+            self._add_measure(part, 1, [])
+        else:
+            # Group notes into measures by time signature
+            measure_notes = self._group_into_measures(notes)
+            for i, mn in enumerate(measure_notes):
+                self._add_measure(part, i + 1, mn)
+
+        xml_str = minidom.parseString(tostring(root)).toprettyxml(indent="  ")
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(xml_str)
+
+    def _group_into_measures(self, notes: list[dict]) -> list[list[dict]]:
+        """Group notes into measures (assuming 4/4, quarter=120)."""
+        if not notes:
+            return [[]]
+
+        beat_duration = 60.0 / 120  # Quarter note duration in seconds
+        beats_per_measure = 4
+        measure_duration = beats_per_measure * beat_duration
+
+        measures = []
+        current_measure = []
+        measure_start = 0
+
+        for note in notes:
+            if note["start"] >= measure_start + measure_duration:
+                if current_measure:
+                    measures.append(current_measure)
+                    current_measure = []
+                measure_start += measure_duration
+            current_measure.append(note)
+
+        if current_measure:
+            measures.append(current_measure)
+
+        return measures
+
+    def _add_measure(self, parent: Element, number: int, notes: list[dict]):
+        """Add a measure element to the part."""
+        measure = SubElement(parent, "measure", number=str(number))
+
+        # Attributes (first measure only)
+        if number == 1:
+            attributes = SubElement(measure, "attributes")
+            divisions = SubElement(attributes, "divisions")
+            divisions.text = "1"
+
+            time = SubElement(attributes, "time")
+            beats = SubElement(time, "beats")
+            beats.text = "4"
+            beat_type = SubElement(time, "beat-type")
+            beat_type.text = "4"
+
+            clef = SubElement(attributes, "clef")
+            sign = SubElement(clef, "sign")
+            sign.text = "G"
+            line = SubElement(clef, "line")
+            line.text = "2"
+
+        # Note events
+        for note in notes:
+            self._add_note(measure, note)
+
+    def _add_note(self, parent: Element, note_data: dict):
+        """Add a single note to the measure."""
+        midi = note_data["midi"]
+        duration_quarters = note_data.get("duration", 0.5) / (60.0 / 120)
+
+        note = SubElement(parent, "note")
+
+        pitch = SubElement(note, "pitch")
+
+        # Convert MIDI to step/octave
+        step_idx = (midi % 12)
+        octave = (midi // 12) - 1
+        natural_steps = [0, 2, 4, 5, 7, 9, 11]
+
+        step_name = NOTE_NAMES[step_idx % 7]
+
+        # Determine accidental
+        accidental = step_idx - natural_steps[step_idx % 7]
+        if step_idx >= 5:
+            # Adjust for F onward
+            natural = natural_steps[(step_idx + 1) % 7 - 1] if step_idx <= 11 else 0
+            accidental = step_idx - natural
+
+        if accidental < 0:
+            step_name = NOTE_NAMES[(step_idx - accidental) % 7]
+
+        step_elem = SubElement(pitch, "step")
+        step_elem.text = step_name
+
+        if accidental != 0:
+            alter = SubElement(pitch, "alter")
+            alter.text = str(accidental)
+
+        octave_elem = SubElement(pitch, "octave")
+        octave_elem.text = str(octave)
+
+        duration = SubElement(note, "duration")
+        duration.text = str(max(1, int(round(duration_quarters))))
+
+        voice = SubElement(note, "voice")
+        voice.text = "1"
+
+        type_elem = SubElement(note, "type")
+        type_elem.text = self._midi_to_type(duration_quarters)
+
+        velocity = note_data.get("velocity", 80)
+        dynamics = SubElement(note, "dynamics")
+        dynamics.text = str(velocity)
+
+    def _midi_to_type(self, quarters: float) -> str:
+        """Map quarter-note duration to MusicXML note type."""
+        if quarters >= 4:
+            return "whole"
+        elif quarters >= 2:
+            return "half"
+        elif quarters >= 1:
+            return "quarter"
+        elif quarters >= 0.5:
+            return "eighth"
+        elif quarters >= 0.25:
+            return "16th"
+        else:
+            return "32nd"
