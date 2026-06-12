@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScoreFlow — AI 跨乐器乐谱转写</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <span class="logo">🎵 ScoreFlow</span>
+            <span class="tagline">AI 跨乐器乐谱转写</span>
+        </header>
+
+        <!-- Instrument Selector -->
+        <section class="instrument-bar">
+            <button class="inst active" data-id="guitar">🎸 吉他</button>
+            <button class="inst" data-id="ukulele">🪕 尤克里里</button>
+            <button class="inst" data-id="piano">🎹 钢琴</button>
+            <button class="inst" data-id="violin">🎻 小提琴</button>
+            <button class="inst" data-id="harp">🎼 竖琴</button>
+            <button class="inst" data-id="guzheng">🏯 古筝</button>
+            <button class="inst" data-id="suona">📯 唢呐</button>
+        </section>
+
+        <!-- Upload Area -->
+        <section class="upload-section" id="uploadSection">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📂</div>
+                <p class="upload-text">拖拽音频文件到此处，或<span class="link">点击上传</span></p>
+                <p class="upload-hint">支持 MP3 / WAV / M4A / FLAC · 最大 50MB</p>
+            </div>
+            <input type="file" id="fileInput" hidden accept="audio/*">
+            <div class="file-info" id="fileInfo" style="display:none">
+                <span class="file-icon">🎵</span>
+                <span class="file-name" id="fileName"></span>
+                <button class="file-remove" id="fileRemove">✕</button>
+            </div>
+        </section>
+
+        <!-- Action Buttons -->
+        <section class="actions">
+            <button class="btn btn-primary" id="transcribeBtn">
+                <span>✨</span> AI 转写
+            </button>
+            <button class="btn btn-secondary" id="convertBtn">
+                <span>🔄</span> 转换乐器
+            </button>
+            <button class="btn btn-secondary" id="exportMidiBtn">
+                <span>🎹</span> 导出 MIDI
+            </button>
+            <button class="btn btn-secondary" id="exportXmlBtn">
+                <span>📄</span> 导出 MusicXML
+            </button>
+        </section>
+
+        <!-- Status -->
+        <div class="status-bar" id="statusBar" style="display:none">
+            <span class="spinner" id="spinner"></span>
+            <span class="status-text" id="statusText">正在转写…</span>
+        </div>
+
+        <!-- Score Display -->
+        <section class="score-section" id="scoreSection" style="display:none">
+            <div class="score-header">
+                <h3>📜 乐谱</h3>
+                <div class="score-controls">
+                    <button class="btn-sm" id="zoomIn">🔍+</button>
+                    <button class="btn-sm" id="zoomOut">🔍−</button>
+                    <span class="note-count" id="noteCount"></span>
+                </div>
+            </div>
+            <div class="score-scroll" id="scoreScroll">
+                <div class="score-render" id="notation"></div>
+            </div>
+        </section>
+
+        <!-- Error Display -->
+        <div class="error-box" id="errorBox" style="display:none">
+            <span class="error-icon">⚠️</span>
+            <span class="error-text" id="errorText"></span>
+            <button class="error-close" id="errorClose">✕</button>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            ScoreFlow · 四步管线：分离 → 识别 → 转换 → 编排 · 7 种乐器支持
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

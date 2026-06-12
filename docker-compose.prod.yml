@@ -1,8 +1,5 @@
-# ECS production compose — pulls pre-built images from ACR (Alibaba Cloud Registry).
-# No build step on server = no Docker Hub / PyPI access needed.
-#
-# Usage on ECS:
-#   docker compose -f docker-compose.prod.yml up -d
+# ECS production compose — pulls pre-built images from ACR.
+# Static frontend + FastAPI backend + Nginx reverse proxy.
 services:
   backend:
     image: crpi-es7e6vutqfirgn70.cn-hangzhou.personal.cr.aliyuncs.com/zky_personal/scoreflow:backend
@@ -15,25 +12,16 @@ services:
     environment:
       - ENV=production
 
-  frontend:
-    image: crpi-es7e6vutqfirgn70.cn-hangzhou.personal.cr.aliyuncs.com/zky_personal/scoreflow:frontend
-    container_name: scoreflow-frontend
-    depends_on:
-      - backend
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-
   nginx:
     image: crpi-es7e6vutqfirgn70.cn-hangzhou.personal.cr.aliyuncs.com/zky_personal/scoreflow:nginx
     container_name: scoreflow-nginx
     ports:
       - "80:80"
     volumes:
+      - ./static:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - backend
-      - frontend
     restart: unless-stopped
 
 volumes:
