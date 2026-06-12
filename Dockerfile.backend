@@ -1,0 +1,34 @@
+# ScoreFlow Backend - Python 3.12 + ML dependencies
+# Python 3.12 required: TensorFlow/PyTorch not compatible with 3.13+
+FROM python:3.12-slim
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsndfile1 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies (cache-busted only when requirements change)
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+
+# Copy application code
+COPY backend/ /app/backend/
+COPY engine/ /app/engine/
+
+# Create runtime directories
+RUN mkdir -p /app/backend/uploads /app/backend/output
+
+WORKDIR /app/backend
+
+# ML model cache directory (mount as volume to persist)
+ENV BASIC_PITCH_CACHE_DIR=/app/backend/.model_cache
+ENV TORCH_HOME=/app/backend/.model_cache/torch
+ENV TFHUB_CACHE_DIR=/app/backend/.model_cache/tfhub
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

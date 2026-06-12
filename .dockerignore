@@ -1,0 +1,29 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+engine/__pycache__/
+engine/**/__pycache__/
+*.pyc
+
+# Node
+web/node_modules/
+web/.next/
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Test files
+test_*.py
+test_*.wav
+test_*.mp3
+
+# Local files
+*.bat
+README.md
+CLAUDE.md

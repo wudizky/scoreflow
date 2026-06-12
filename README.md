@@ -81,6 +81,88 @@ npm run dev
 
 ---
 
+## 🐳 Docker 部署（云服务器）
+
+将 ScoreFlow 部署到自己的云服务器，随时随地使用。
+
+### 服务器要求
+
+| 资源 | 最低配置 | 推荐配置 |
+|------|---------|---------|
+| CPU | 2 核 | 4 核+ |
+| 内存 | 4 GB | 8 GB+ |
+| 磁盘 | 20 GB | 40 GB+（ML 模型约 3GB） |
+| 系统 | Ubuntu 20.04+ / CentOS 8+ / Alibaba Linux |
+| 软件 | Docker + Docker Compose 插件 |
+
+### 一键部署
+
+```bash
+# 1. SSH 登录服务器
+ssh root@你的服务器IP
+
+# 2. 下载部署脚本
+wget https://raw.githubusercontent.com/wudizky/scoreflow/main/deploy.sh
+chmod +x deploy.sh
+./deploy.sh
+```
+
+脚本会自动：安装 Docker → 克隆项目 → 构建镜像 → 启动服务。
+
+### 手动部署
+
+```bash
+# 1. 安装 Docker（如已安装可跳过）
+curl -fsSL https://get.docker.com | bash
+
+# 2. 克隆项目
+git clone https://github.com/wudizky/scoreflow.git
+cd scoreflow
+
+# 3. 构建并启动
+sudo docker compose build
+sudo docker compose up -d
+
+# 4. 查看日志
+sudo docker compose logs -f
+```
+
+### 服务端口
+
+| 服务 | 容器内端口 | 宿主机端口 | 说明 |
+|------|-----------|-----------|------|
+| Nginx | 80 | 80 | 统一入口（反向代理） |
+| Backend | 8000 | — | FastAPI（不对外暴露） |
+| Frontend | 3000 | — | Next.js（不对外暴露） |
+
+### 常用管理命令
+
+```bash
+sudo docker compose restart    # 重启所有服务
+sudo docker compose down       # 停止服务
+sudo docker compose up -d      # 后台启动
+sudo docker compose logs -f    # 查看日志（Ctrl+C 退出）
+sudo docker compose ps         # 查看运行状态
+```
+
+### 更新项目
+
+```bash
+cd ~/scoreflow
+git pull
+sudo docker compose build --no-cache
+sudo docker compose up -d
+```
+
+### 注意事项
+
+- **首次转录较慢**：ML 模型首次加载时会自动下载（约 2-3GB），之后缓存到 Docker volume 持久保存
+- **音频上传限制**：默认 50MB，可在 `nginx.conf` 中调整 `client_max_body_size`
+- **GPU 加速**：如有 NVIDIA GPU，在 `docker-compose.yml` 中取消 GPU 相关注释
+- **HTTPS**：建议在前面加一层 Nginx/Caddy 反代并配置 SSL 证书
+
+---
+
 ## 技术原理（四步管线）
 
 ScoreFlow 的技术路径分为四个关键步骤：
@@ -141,6 +223,11 @@ scoreflow/
 │   │   └── ui/                 # 通用组件
 │   ├── lib/                    # 核心工具
 │   └── pages/                  # 页面
+├── Dockerfile.backend          # 后端 Docker 镜像
+├── Dockerfile.frontend         # 前端 Docker 镜像
+├── docker-compose.yml          # Docker 编排
+├── nginx.conf                  # Nginx 反向代理配置
+├── deploy.sh                   # 服务器一键部署脚本
 ├── start.bat                   # Windows 一键启动
 └── package.json                # 根配置
 ```
