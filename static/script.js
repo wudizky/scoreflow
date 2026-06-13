@@ -1,21 +1,22 @@
-// ScoreFlow — Frontend Logic
+// ScoreFlow — Frontend Logic (matched to actual backend API)
 const API = '/api/v1';
+
+// ── State ──
 let selectedFile = null, selectedInstrument = 'guitar';
-let currentNotes = [], zoomLevel = 1;
+let currentNotes = [], sourceInstrument = 'guitar', zoomLevel = 1;
 
 // ── DOM refs ──
 const $ = id => document.getElementById(id);
 const uploadArea = $('uploadArea'), fileInput = $('fileInput'), fileInfo = $('fileInfo');
-const fileName = $('fileName'), fileRemove = $('fileRemove'), uploadSection = $('uploadSection');
-const transcribeBtn = $('transcribeBtn'), convertBtn = $('convertBtn');
-const exportMidiBtn = $('exportMidiBtn'), exportXmlBtn = $('exportXmlBtn');
+const fileName = $('fileName'), fileRemove = $('fileRemove');
+const transcribeBtn = $('transcribeBtn'), convertBtn = $('convertBtn'), exportBtn = $('exportBtn');
 const statusBar = $('statusBar'), statusText = $('statusText');
 const scoreSection = $('scoreSection'), notation = $('notation'), noteCount = $('noteCount');
 const scoreScroll = $('scoreScroll');
 const errorBox = $('errorBox'), errorText = $('errorText'), errorClose = $('errorClose');
 const zoomIn = $('zoomIn'), zoomOut = $('zoomOut');
 
-// ── Instrument selector ──
+// ── Instrument selector (IDs match backend engine/instruments/*.py) ──
 document.querySelectorAll('.inst').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.inst').forEach(b => b.classList.remove('active'));
@@ -37,32 +38,51 @@ uploadArea.addEventListener('drop', e => {
 fileRemove.addEventListener('click', () => {
     selectedFile = null;
     fileInfo.style.display = 'none';
-    uploadArea.style.display = '';
+    document.getElementById('uploadArea').style.display = '';
 });
 
 function setFile(file) {
     selectedFile = file;
     fileName.textContent = file.name;
-    uploadArea.style.display = 'none';
+    document.getElementById('uploadArea').style.display = 'none';
     fileInfo.style.display = 'flex';
 }
 
-// ── Helpers ──
+// ── UI helpers ──
 function showStatus(msg) { statusText.textContent = msg; statusBar.style.display = 'flex'; }
 function hideStatus() { statusBar.style.display = 'none'; }
 function showError(msg) { errorText.textContent = msg; errorBox.style.display = 'flex'; }
 function hideError() { errorBox.style.display = 'none'; }
 errorClose.addEventListener('click', hideError);
 
-// ── Render notes with VexFlow ──
+// ── Scale zoom ──
+zoomIn.addEventListener('click', () => { zoomLevel = Math.min(2.0, zoomLevel + 0.20); drawScore(currentNotes); });
+zoomOut.addEventListener('click', () => { zoomLevel = Math.max(0.4, zoomLevel - 0.20); drawScore(currentNotes); });
+
+// ── Helpers ──
+function midiToNote(midi) {
+    const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    return names[midi % 12] + Math.floor(midi / 12 - 1);
+}
+
+function mapDuration(seconds) {
+    if (seconds >= 1.5) return '1';
+    if (seconds >= 0.75) return '2';
+    if (seconds >= 0.5) return 'qd';
+    if (seconds >= 0.35) return 'q';
+    if (seconds >= 0.2) return '8';
+    return '16';
+}
+
+// ── Score rendering ──
 function renderNotes(notes) {
     hideError();
     if (!notes || !notes.length) {
-        notation.innerHTML = '<div style="padding:2rem;color:#9ca3af;text-align:center">🎵 未识别到音符，请尝试其他音频</div>';
+        notation.innerHTML = '<div style="padding:2.5rem;color:#9ca3af;text-align:center;font-size:1.1rem">🎵 未识别到音符，请尝试其他音频文件</div>';
         scoreSection.style.display = 'block';
+        noteCount.textContent = '0 个音符';
         return;
     }
-
     currentNotes = notes;
     noteCount.textContent = `${notes.length} 个音符`;
     scoreSection.style.display = 'block';
@@ -71,13 +91,10 @@ function renderNotes(notes) {
 
 function drawScore(notes) {
     notation.innerHTML = '';
-    const containerWidth = Math.max(800, notes.length * 60 + 120);
-    const staveWidth = containerWidth - 40;
-
-    const VF = typeof Vex !== 'undefined' ? Vex.Flow : window.Vex && window.Vex.Flow;
+    const containerWidth = Math.max(800, notes.length * 65 + 120);
+    const VF = (typeof Vex !== 'undefined' ? Vex.Flow : null);
 
     if (!VF) {
-        // Fallback: simple SVG rendering
         renderSimpleSVG(notes, containerWidth);
         return;
     }
@@ -85,212 +102,141 @@ function drawScore(notes) {
     try {
         const renderer = new VF.Renderer(notation, VF.Renderer.Backends.SVG);
         renderer.resize(containerWidth * zoomLevel, 200 * zoomLevel);
-
         const ctx = renderer.getContext();
         ctx.scale(zoomLevel, zoomLevel);
 
-        const stave = new VF.Stave(20, 40, staveWidth);
-        stave.addClef('treble').addTimeSignature('4/4');
+        const stave = new VF.Stave(20, 50, containerWidth - 40);
+        stave.addClef('treble');
         stave.setContext(ctx).draw();
 
-        // Group notes — one stave per line, 8 bars max
-        const voices = [];
-        for (let i = 0; i < notes.length; i++) {
-            const note = notes[i];
-            const midi = note.midi || 60;
-            const dur = note.duration ? mapDuration(note.duration) : 'q';
-            const keys = [midiToNote(midi)];
-
-            const staveNote = new VF.StaveNote({
-                clef: 'treble', keys: keys, duration: dur
-            });
-
-            // Accidental if needed
-            const noteName = midiToNote(midi);
-            if (noteName.includes('#')) {
-                staveNote.addAccidental(0, new VF.Accidental('#'));
-            } else if (noteName.includes('b')) {
-                staveNote.addAccidental(0, new VF.Accidental('b'));
-            }
-
-            // Add dot for dotted notes
-            if (dur === 'qd') {
-                VF.Dot.buildAndAttach([staveNote]);
-            }
-
-            voices.push(staveNote);
-        }
-
-        // Beam notes in groups of 4
-        for (let i = 0; i < voices.length; i += 4) {
-            const group = voices.slice(i, Math.min(i + 4, voices.length));
-            if (group.length > 1) {
-                try {
-                    const beams = VF.Beam.generateBeams(group, { beam_rests: false });
-                    beams.forEach(b => b.setContext(ctx).draw());
-                } catch(e) {
-                    // beaming may fail with mixed durations — that's OK
-                }
-            }
-        }
-
-        // Draw all voices
-        VF.Formatter.FormatAndDraw(ctx, stave, voices, {
-            auto_beam: false,
-            align_rests: true
+        const voices = notes.map(n => {
+            const dur = mapDuration(n.duration || 0.35);
+            const note = new VF.StaveNote({ clef: 'treble', keys: [midiToNote(n.midi)], duration: dur });
+            const key = midiToNote(n.midi);
+            if (key.includes('#')) note.addAccidental(0, new VF.Accidental('#'));
+            else if (key.includes('b')) note.addAccidental(0, new VF.Accidental('b'));
+            if (dur === 'qd') VF.Dot.buildAndAttach([note]);
+            return note;
         });
 
-    } catch(e) {
-        console.warn('VexFlow render error, using fallback:', e);
+        VF.Formatter.FormatAndDraw(ctx, stave, voices, { auto_beam: true });
+    } catch (e) {
+        console.warn('VexFlow error, fallback SVG:', e);
         renderSimpleSVG(notes, containerWidth);
     }
 }
 
-function renderSimpleSVG(notes, width) {
-    const h = 200;
-    const notePositions = [];
-    const midiMin = Math.min(...notes.map(n => n.midi || 60));
-    const midiMax = Math.max(...notes.map(n => n.midi || 72));
-    const midiRange = Math.max(midiMax - midiMin, 6);
+function renderSimpleSVG(notes, W) {
+    const H = 200, X0 = 40, X1 = W - 30;
+    const allMidi = notes.map(n => n.midi || 60);
+    const lo = Math.min(...allMidi), hi = Math.max(...allMidi), range = Math.max(hi - lo, 6);
+    const spacing = Math.min(60, (X1 - X0) / Math.max(notes.length, 1));
 
-    let x = 40;
-    const xSpacing = Math.min(60, (width - 80) / Math.max(notes.length, 1));
+    let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="${W}" height="${H}" fill="#fffef9"/>`;
 
-    notes.forEach((n, i) => {
-        const midi = n.midi || 60;
-        const y = 20 + ((midiMax - midi) / midiRange) * (h - 60);
-        notePositions.push({ x: x + 6, y, midi, dur: n.duration || 0.5 });
-        x += xSpacing;
-    });
-
-    let svg = `<svg width="${width}" height="${h}" viewBox="0 0 ${width} ${h}" xmlns="http://www.w3.org/2000/svg">`;
-    svg += `<rect width="${width}" height="${h}" fill="#fffef9"/>`;
-
-    // Staff lines
     for (let i = 0; i < 5; i++) {
-        const ly = 25 + i * 20;
-        svg += `<line x1="20" y1="${ly}" x2="${width - 20}" y2="${ly}" stroke="#ccc" stroke-width="0.8"/>`;
+        const yy = 25 + i * 20;
+        svg += `<line x1="${X0-10}" y1="${yy}" x2="${X1+10}" y2="${yy}" stroke="#c4c4c4" stroke-width="0.8"/>`;
     }
 
-    // Notes
-    notePositions.forEach(({x, y, midi, dur}) => {
-        const r = 7;
-        svg += `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r * 0.8}" fill="#4f6ef6" stroke="#3b54d4" stroke-width="1.2"/>`;
-        // Stem
-        if (y > 65) {
-            svg += `<line x1="${x + r}" y1="${y}" x2="${x + r}" y2="${y - 35}" stroke="#333" stroke-width="1.5"/>`;
-        } else {
-            svg += `<line x1="${x - r}" y1="${y}" x2="${x - r}" y2="${y + 35}" stroke="#333" stroke-width="1.5"/>`;
-        }
-        // Note name label
-        const label = midiToNote(midi).replace(/\d/, '');
-        svg += `<text x="${x}" y="${h - 12}" text-anchor="middle" font-size="11" fill="#6b7280">${label}</text>`;
+    notes.forEach((n, i) => {
+        const x = X0 + i * spacing, y = 20 + ((hi - n.midi) / range) * (H - 60), r = 7;
+        svg += `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r*0.78}" fill="#4f6ef6" stroke="#3345cc" stroke-width="1"/>`;
+        svg += `<line x1="${x + (y > 60 ? r : -r)}" y1="${y}" x2="${x + (y > 60 ? r : -r)}" y2="${y + (y > 60 ? -35 : 35)}" stroke="#444" stroke-width="1.2"/>`;
+        const label = midiToNote(n.midi).replace(/\d/, '');
+        svg += `<text x="${x}" y="${H-10}" text-anchor="middle" font-size="11" fill="#888">${label}</text>`;
     });
-
     svg += '</svg>';
     notation.innerHTML = svg;
 }
 
-function midiToNote(midi) {
-    const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-    const name = names[midi % 12];
-    const octave = Math.floor(midi / 12) - 1;
-    return name + '/' + octave;
-}
+// ── API calls (matched to backend routes) ──
 
-function mapDuration(seconds) {
-    if (seconds >= 1.5) return '1';    // whole
-    if (seconds >= 0.75) return '2';   // half
-    if (seconds >= 0.5) return 'qd';   // dotted quarter
-    if (seconds >= 0.35) return 'q';   // quarter
-    if (seconds >= 0.2) return '8';    // eighth
-    return '16';                        // sixteenth
-}
-
-// ── Zoom ──
-zoomIn.addEventListener('click', () => { zoomLevel = Math.min(2, zoomLevel + 0.2); drawScore(currentNotes); });
-zoomOut.addEventListener('click', () => { zoomLevel = Math.max(0.4, zoomLevel - 0.2); drawScore(currentNotes); });
-
-// ── API Calls ──
 async function transcribe() {
-    if (!selectedFile) {
-        showError('请先选择音频文件');
-        return;
-    }
+    if (!selectedFile) { showError('请先选择音频文件'); return; }
     hideError();
-    showStatus('正在 AI 转写…（可能需要 10-30 秒）');
+    showStatus('AI 转写中…（音频越大耗时越长，请耐心等待）');
 
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('instrument', selectedInstrument);
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fd.append('instrument', selectedInstrument);
+    fd.append('output_format', 'musicxml');
+    fd.append('separate_stems', 'false');
 
     try {
-        const res = await fetch(`${API}/transcribe`, { method: 'POST', body: formData });
+        const res = await fetch(API + '/transcribe', { method: 'POST', body: fd });
         if (!res.ok) {
-            const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
-            throw new Error(err.detail || `服务器错误 ${res.status}`);
+            const err = await res.json().catch(() => ({ detail: '服务器错误 ' + res.status }));
+            throw new Error(err.detail || 'HTTP ' + res.status);
         }
         const data = await res.json();
+        sourceInstrument = data.instrument || selectedInstrument;
         hideStatus();
         renderNotes(data.notes || []);
-    } catch(e) {
+        const full = data.full_note_count || data.note_count;
+        if (full) noteCount.textContent = `${data.notes?.length || 0} / ${full} 个音符`;
+    } catch (e) {
         hideStatus();
-        showError(`转写失败: ${e.message}`);
+        showError(`转写失败：${e.message}`);
     }
 }
 
 async function convertInstrument() {
-    if (!currentNotes.length) {
-        showError('请先完成 AI 转写');
-        return;
-    }
+    if (!currentNotes.length) { showError('请先完成 AI 转写'); return; }
     const target = selectedInstrument;
-    showStatus(`正在转换到 ${target}…`);
+    showStatus(`转换 ${sourceInstrument} → ${target}…`);
+
+    const fd = new FormData();
+    fd.append('source_id', sourceInstrument);
+    fd.append('target_id', target);
+    fd.append('notes', JSON.stringify(currentNotes));
 
     try {
-        const res = await fetch(`${API}/convert-notes`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ notes: currentNotes, target_instrument: target })
-        });
-        if (!res.ok) throw new Error((await res.json()).detail || `HTTP ${res.status}`);
+        const res = await fetch(API + '/convert', { method: 'POST', body: fd });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'HTTP ' + res.status); }
         const data = await res.json();
         hideStatus();
         renderNotes(data.notes || []);
-    } catch(e) {
+        sourceInstrument = target;
+        if (data.removed_notes) noteCount.textContent += ` (${data.removed_notes} 个超出目标乐器音域已移除)`;
+    } catch (e) {
         hideStatus();
-        showError(`转换失败: ${e.message}`);
+        showError(`转换失败：${e.message}`);
     }
 }
 
-async function exportFile(format) {
-    if (!currentNotes.length) {
-        showError('请先完成 AI 转写');
-        return;
-    }
-    showStatus(`正在导出 ${format.toUpperCase()}…`);
+async function exportMidi() {
+    if (!currentNotes.length) { showError('请先完成 AI 转写'); return; }
+    showStatus('导出 MIDI 中…');
+
+    const fd = new FormData();
+    fd.append('source_id', sourceInstrument);
+    fd.append('target_id', sourceInstrument);
+    fd.append('notes', JSON.stringify(currentNotes));
 
     try {
-        const res = await fetch(`${API}/export-${format}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ notes: currentNotes, instrument: selectedInstrument })
-        });
-        if (!res.ok) throw new Error(`导出失败: HTTP ${res.status}`);
+        const res = await fetch(API + '/convert-midi', { method: 'POST', body: fd });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `scoreflow_${Date.now()}.${format}`; a.click();
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, `scoreflow_${sourceInstrument}_${Date.now()}.mid`);
         hideStatus();
-    } catch(e) {
+    } catch (e) {
         hideStatus();
-        showError(`导出失败: ${e.message}`);
+        showError(`导出失败：${e.message}`);
     }
 }
 
-// ── Event bindings ──
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ── Button bindings ──
 transcribeBtn.addEventListener('click', transcribe);
 convertBtn.addEventListener('click', convertInstrument);
-exportMidiBtn.addEventListener('click', () => exportFile('midi'));
-exportXmlBtn.addEventListener('click', () => exportFile('musicxml'));
+exportBtn.addEventListener('click', exportMidi);
