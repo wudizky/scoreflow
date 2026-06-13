@@ -11,7 +11,7 @@
         <!-- Header -->
         <header class="header">
             <span class="logo">🎵 ScoreFlow</span>
-            <span class="tagline">AI 跨乐器乐谱转写</span>
+            <span class="tagline">AI 跨乐器乐谱转写 · 7 种乐器</span>
         </header>
 
         <!-- Instrument Selector -->
@@ -53,26 +53,19 @@
             </button>
         </section>
 
-        <!-- Status -->
-        <div class="status-bar" id="statusBar" style="display:none">
-            <span class="spinner" id="spinner"></span>
-            <span class="status-text" id="statusText">正在转写…</span>
+        <!-- 4-Step Progress Indicator -->
+        <div class="progress-bar" id="progressBar" style="display:none">
+            <div class="progress-steps">
+                <div class="progress-step" id="step1"><span>🔊</span> 分离</div>
+                <div class="progress-connector" id="conn1"></div>
+                <div class="progress-step" id="step2"><span>🎯</span> 识别</div>
+                <div class="progress-connector" id="conn2"></div>
+                <div class="progress-step" id="step3"><span>🔄</span> 转换</div>
+                <div class="progress-connector" id="conn3"></div>
+                <div class="progress-step" id="step4"><span>📜</span> 编排</div>
+            </div>
+            <div class="progress-label" id="progressLabel">准备中…</div>
         </div>
-
-        <!-- Score Display -->
-        <section class="score-section" id="scoreSection" style="display:none">
-            <div class="score-header">
-                <h3>📜 乐谱</h3>
-                <div class="score-controls">
-                    <button class="btn-sm" id="zoomIn" title="放大乐谱">🔍 放大</button>
-                    <button class="btn-sm" id="zoomOut" title="缩小乐谱">缩小</button>
-                    <span class="note-count" id="noteCount"></span>
-                </div>
-            </div>
-            <div class="score-scroll" id="scoreScroll">
-                <div class="score-render" id="notation"></div>
-            </div>
-        </section>
 
         <!-- Error Display -->
         <div class="error-box" id="errorBox" style="display:none">
@@ -81,12 +74,35 @@
             <button class="error-close" id="errorClose">✕</button>
         </div>
 
+        <!-- Score Display -->
+        <section class="score-section" id="scoreSection" style="display:none">
+            <div class="score-header">
+                <h3 id="scoreTitle">📜 乐谱</h3>
+                <div class="score-controls">
+                    <span class="render-badge" id="renderBadge"></span>
+                    <button class="btn-sm" id="zoomIn" title="放大">🔍 放大</button>
+                    <button class="btn-sm" id="zoomOut" title="缩小">缩小</button>
+                    <span class="note-count" id="noteCount"></span>
+                </div>
+            </div>
+            <!-- Chord bar (for guitar/ukulele) -->
+            <div class="chord-bar" id="chordBar" style="display:none"></div>
+            <!-- OSMD target -->
+            <div class="score-scroll" id="scoreScroll">
+                <div id="osmdContainer"></div>
+                <div class="score-render" id="notation"></div>
+            </div>
+        </section>
+
         <!-- Footer -->
         <footer class="footer">
-            ScoreFlow · 四步管线：分离 → 识别 → 转换 → 编排 · 7 种乐器支持
+            ScoreFlow · 四步管线：分离 → 识别 → 转换 → 编排 · 引擎：Basic Pitch + CREPE + 智能转换规则
         </footer>
     </div>
 
+    <!-- OSMD — primary render engine; falls back to inline SVG if unavailable -->
+    <script src="osmd/opensheetmusicdisplay.min.js" onerror="window.OSMD_LOADED=false"></script>
+    <script>window.OSMD_LOADED = typeof opensheetmusicdisplay !== 'undefined';</script>
     <script src="script.js"></script>
 </body>
 </html>

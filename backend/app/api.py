@@ -4,7 +4,7 @@ import os
 import uuid
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from engine.registry import InstrumentRegistry
 from engine.converter import ScoreConverter
@@ -52,10 +52,25 @@ def build_notation_data(notes: list[dict], instrument_id: str) -> dict:
         notation_data.update(gs)
 
     else:
-        # Treble clef: just tag the notes
         notation_data["notes"] = notes
 
     return notation_data
+
+
+def _generate_musicxml_string(notes: list[dict], instrument: str) -> str:
+    """Generate MusicXML string from notes (for frontend OSMD rendering)."""
+    from app.core.musicxml_generator import MusicXMLGenerator
+    import tempfile
+    gen = MusicXMLGenerator()
+    tmp_path = os.path.join(tempfile.gettempdir(), f"tmp_{uuid.uuid4().hex[:8]}.musicxml")
+    gen.generate(notes, tmp_path, instrument=instrument)
+    with open(tmp_path, "r", encoding="utf-8") as f:
+        xml_str = f.read()
+    try:
+        os.remove(tmp_path)
+    except OSError:
+        pass
+    return xml_str
 
 
 @router.get("/instruments")
@@ -70,6 +85,7 @@ async def list_instruments():
             "range_low": inst.range.low,
             "range_high": inst.range.high,
             "midi_program": inst.midi_program,
+            "notation_type": NOTATION_MAP.get(inst.id, NotationType.TREBLE_CLEF).value,
         }
         for inst in registry.all()
     ]}
@@ -107,7 +123,6 @@ async def transcribe_audio(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    # Run transcription pipeline
     from app.core import TranscriptionService
     service = TranscriptionService()
     try:
@@ -117,10 +132,24 @@ async def transcribe_audio(
             separate_stems=separate_stems,
             output_format=output_format,
         )
-        # Add notation data for frontend rendering
-        result["notation"] = build_notation_data(
-            result.get("notes", []), instrument
-        )
+        notes = result.get("notes", [])
+
+        # Notation rendering data (chords, TAB, grand staff split)
+        result["notation"] = build_notation_data(notes, instrument)
+
+        # Full MusicXML string for OSMD professional rendering
+        musicxml_path = result.get("musicxml_path")
+        if musicxml_path and os.path.exists(musicxml_path):
+            with open(musicxml_path, "r", encoding="utf-8") as f:
+                result["musicxml"] = f.read()
+        else:
+            # Generate on-the-fly if file not written
+            result["musicxml"] = _generate_musicxml_string(notes, instrument)
+
+        # Clean up large file paths (not needed by frontend)
+        result.pop("output_path", None)
+        result.pop("pdf_path", None)
+
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -130,7 +159,7 @@ async def transcribe_audio(
 async def convert_score(
     source_id: str = Form(...),
     target_id: str = Form(...),
-    notes: str = Form(...),  # JSON string of note array
+    notes: str = Form(...),
 ):
     """Convert transcribed notes between instruments."""
     import json
@@ -147,12 +176,23 @@ async def convert_score(
         raise HTTPException(status_code=404, detail=f"Unknown target: {target_id}")
 
     converted = converter.convert_notes(note_data, source_id, target_id)
+    active_notes = [n for n in converted if not n.get("removed")]
+
+    # Include notation data for target instrument (P1 fix)
+    notation = build_notation_data(active_notes, target_id)
+
+    # Generate MusicXML for target instrument
+    musicxml = _generate_musicxml_string(active_notes, target_id)
+
     return {
         "source_id": source_id,
         "target_id": target_id,
         "note_count": len(converted),
-        "notes": converted,
+        "notes": active_notes,
+        "full_notes": converted,
         "removed_notes": sum(1 for n in converted if n.get("removed")),
+        "notation": notation,
+        "musicxml": musicxml,
     }
 
 
@@ -224,3 +264,16 @@ async def transcribe_and_convert(
         media_type="audio/midi",
         filename=f"{source_instrument}_to_{target_instrument}.mid",
     )
+
+
+@router.get("/transcribe-musicxml/{file_id}")
+async def get_musicxml(file_id: str):
+    """Get raw MusicXML for a previously transcribed file."""
+    # Look for .musicxml file in output directory
+    output_dir = Path(__file__).parent.parent / "output"
+    for ext in [".musicxml", ".xml"]:
+        candidate = output_dir / f"{file_id}{ext}"
+        if candidate.exists():
+            content = candidate.read_text(encoding="utf-8")
+            return Response(content=content, media_type="application/vnd.recordare.musicxml+xml")
+    raise HTTPException(status_code=404, detail="MusicXML not found")
