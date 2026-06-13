@@ -20,7 +20,7 @@ def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
     """
     tk = verovio.toolkit()
     tk.setOptions({
-        "scale": int(zoom * 40),
+        "scale": int(zoom * 55),           # 55 = readable default (40 is too small)
         "adjustPageWidth": True,
         "adjustPageHeight": True,
         "breaks": "none",

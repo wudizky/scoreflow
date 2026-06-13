@@ -55,14 +55,21 @@ class AMTEngine:
         import basic_pitch.note_creation
         import numpy as np
 
-        # Prefer ONNX model (compatible with newer TF versions)
         model_dir = pathlib.Path(basic_pitch.__path__[0]) / "saved_models" / "icassp_2022"
         model_path = model_dir / "nmp.onnx"
         if not model_path.exists():
-            model_path = model_dir / "nmp"  # fallback to TF SavedModel
+            model_path = model_dir / "nmp"
 
+        # Lower thresholds for guitar/fingerstyle polyphonic detection
+        # Defaults: onset=0.5, frame=0.3 — too high for soft fingerstyle notes
         model_output, midi_data, note_events = basic_pitch.inference.predict(
-            audio_path, model_or_model_path=model_path
+            audio_path,
+            model_or_model_path=model_path,
+            onset_threshold=0.3,       # default 0.5 — catch softer attacks
+            frame_threshold=0.15,       # default 0.3 — keep quieter sustained notes
+            minimum_note_length=58,    # default 127.7ms — allow shorter notes
+            minimum_frequency=55,       # A1 — guitar low E is ~82Hz
+            maximum_frequency=1500,     # ~F#6 — above that is harmonics
         )
 
         notes = []
