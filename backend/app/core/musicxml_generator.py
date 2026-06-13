@@ -4,7 +4,14 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 from xml.dom import minidom
 
 NOTE_NAMES = ["C", "D", "E", "F", "G", "A", "B"]
-ACCIDENTALS = {1: "#", 2: "##", -1: "-", -2: "--"}
+
+# MIDI pitch class → (step_name, alter)
+# C=0, C#=1, D=2, D#=3, E=4, F=5, F#=6, G=7, G#=8, A=9, A#=10, B=11
+_MIDI_TO_STEP = [
+    ("C", 0), ("C", 1), ("D", 0), ("D", 1),
+    ("E", 0), ("F", 0), ("F", 1), ("G", 0),
+    ("G", 1), ("A", 0), ("A", 1), ("B", 0),
+]
 
 
 class MusicXMLGenerator:
@@ -89,7 +96,7 @@ class MusicXMLGenerator:
             self._add_note(measure, note)
 
     def _add_note(self, parent: Element, note_data: dict):
-        """Add a single note to the measure."""
+        """Add a single note to the measure with correct MusicXML step/alter."""
         midi = note_data["midi"]
         duration_quarters = note_data.get("duration", 0.5) / (60.0 / 120)
 
@@ -97,29 +104,17 @@ class MusicXMLGenerator:
 
         pitch = SubElement(note, "pitch")
 
-        # Convert MIDI to step/octave
-        step_idx = (midi % 12)
+        # Correct MIDI → step/alter lookup (MusicXML standard)
+        pitch_class = midi % 12
+        step_name, alter = _MIDI_TO_STEP[pitch_class]
         octave = (midi // 12) - 1
-        natural_steps = [0, 2, 4, 5, 7, 9, 11]
-
-        step_name = NOTE_NAMES[step_idx % 7]
-
-        # Determine accidental
-        accidental = step_idx - natural_steps[step_idx % 7]
-        if step_idx >= 5:
-            # Adjust for F onward
-            natural = natural_steps[(step_idx + 1) % 7 - 1] if step_idx <= 11 else 0
-            accidental = step_idx - natural
-
-        if accidental < 0:
-            step_name = NOTE_NAMES[(step_idx - accidental) % 7]
 
         step_elem = SubElement(pitch, "step")
         step_elem.text = step_name
 
-        if accidental != 0:
-            alter = SubElement(pitch, "alter")
-            alter.text = str(accidental)
+        if alter != 0:
+            alter_elem = SubElement(pitch, "alter")
+            alter_elem.text = str(alter)
 
         octave_elem = SubElement(pitch, "octave")
         octave_elem.text = str(octave)

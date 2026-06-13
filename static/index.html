@@ -100,9 +100,8 @@
         </footer>
     </div>
 
-    <!-- OSMD — primary render engine; falls back to inline SVG if unavailable -->
-    <script src="osmd/opensheetmusicdisplay.min.js" onerror="window.OSMD_LOADED=false"></script>
-    <script>window.OSMD_LOADED = typeof opensheetmusicdisplay !== 'undefined';</script>
+    <!-- OSMD — professional MusicXML renderer (local, zero CDN) -->
+    <script src="osmd/opensheetmusicdisplay.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

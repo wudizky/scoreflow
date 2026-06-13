@@ -148,6 +148,7 @@ function drawNotation(nd) {
 function renderOSMD(musicxml) {
     notation.style.display = 'none';
     osmdContainer.style.display = 'block';
+    osmdContainer.innerHTML = '';
 
     try {
         osmdInstance = new opensheetmusicdisplay.OpenSheetMusicDisplay(osmdContainer, {
@@ -156,31 +157,33 @@ function renderOSMD(musicxml) {
             drawTitle: false,
             drawSubtitle: false,
             drawComposer: false,
-            pageFormat: 'Endless',  // continuous horizontal scroll
-            coloringMode: 0,        // 0=monochrome, 1=color notes
+            drawPartNames: false,
         });
         osmdInstance.load(musicxml).then(() => {
             osmdInstance.render();
-            // Apply zoom
             const svg = osmdContainer.querySelector('svg');
             if (svg) {
                 svg.style.width = (zoomLevel * 100) + '%';
                 svg.style.height = 'auto';
+                svg.style.maxWidth = 'none';
             }
             renderBadge.textContent = '🎼 OSMD 引擎';
         }).catch(e => {
-            console.warn('OSMD render failed, SVG fallback:', e);
-            renderBadge.textContent = '🎨 SVG 引擎（OSMD 失败）';
-            notation.style.display = 'block';
-            osmdContainer.style.display = 'none';
-            if (currentNotation) drawSVGFallback(currentNotation);
+            console.warn('OSMD render failed, using SVG fallback:', e.message || e);
+            fallbackToSVG();
         });
     } catch(e) {
-        console.warn('OSMD init failed:', e);
-        notation.style.display = 'block';
-        osmdContainer.style.display = 'none';
-        if (currentNotation) drawSVGFallback(currentNotation);
+        console.warn('OSMD init failed, using SVG fallback:', e.message || e);
+        fallbackToSVG();
     }
+}
+
+function fallbackToSVG() {
+    renderBadge.textContent = '🎨 SVG 引擎';
+    renderBadge.className = 'render-badge svg';
+    notation.style.display = 'block';
+    osmdContainer.style.display = 'none';
+    if (currentNotation) drawSVGFallback(currentNotation);
 }
 
 function drawSVGFallback(nd) {
