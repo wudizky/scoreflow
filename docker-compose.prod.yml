@@ -8,6 +8,8 @@ services:
       - model_cache:/app/backend/.model_cache
       - uploads:/app/backend/uploads
       - output:/app/backend/output
+      - ./engine:/app/engine:ro
+      - ./backend/app:/app/backend/app:ro
     restart: unless-stopped
     environment:
       - ENV=production

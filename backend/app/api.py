@@ -8,6 +8,9 @@ from fastapi.responses import FileResponse
 
 from engine.registry import InstrumentRegistry
 from engine.converter import ScoreConverter
+from engine.notation import NotationType
+from engine.notation.tab_generator import TabGenerator
+from engine.notation.grand_staff import generate_grand_staff
 
 router = APIRouter()
 registry = InstrumentRegistry()
@@ -18,6 +21,41 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 ALLOWED_AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".webm"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+
+# ── Notation type mapping per instrument ──
+NOTATION_MAP = {
+    "guitar": NotationType.TAB,
+    "ukulele": NotationType.TAB,
+    "piano": NotationType.GRAND_STAFF,
+    "harp": NotationType.GRAND_STAFF,
+    "violin": NotationType.TREBLE_CLEF,
+    "guzheng": NotationType.TREBLE_CLEF,
+    "suona": NotationType.TREBLE_CLEF,
+}
+
+
+def build_notation_data(notes: list[dict], instrument_id: str) -> dict:
+    """Build instrument-appropriate notation rendering data from MIDI notes."""
+    notation_type = NOTATION_MAP.get(instrument_id, NotationType.TREBLE_CLEF)
+    notation_data = {"type": notation_type.value}
+
+    inst = registry.get(instrument_id)
+    tuning = inst.tuning if inst else []
+
+    if notation_type == NotationType.TAB and tuning:
+        gen = TabGenerator(tuning)
+        tab = gen.generate_tab_with_chords(notes)
+        notation_data.update(tab)
+
+    elif notation_type == NotationType.GRAND_STAFF:
+        gs = generate_grand_staff(notes)
+        notation_data.update(gs)
+
+    else:
+        # Treble clef: just tag the notes
+        notation_data["notes"] = notes
+
+    return notation_data
 
 
 @router.get("/instruments")
@@ -78,6 +116,10 @@ async def transcribe_audio(
             instrument=instrument,
             separate_stems=separate_stems,
             output_format=output_format,
+        )
+        # Add notation data for frontend rendering
+        result["notation"] = build_notation_data(
+            result.get("notes", []), instrument
         )
         return result
     except Exception as e:

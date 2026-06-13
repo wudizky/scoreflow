@@ -1,11 +1,8 @@
-// ScoreFlow — Frontend Logic (inline SVG, no CDN dependency)
+// ScoreFlow — Multi-notation: TAB / Grand Staff / Standard
 const API = '/api/v1';
-
-// ── State ──
 let selectedFile = null, selectedInstrument = 'guitar';
-let currentNotes = [], sourceInstrument = 'guitar', zoomLevel = 1;
+let sourceInstrument = 'guitar', zoomLevel = 1, currentNotation = null;
 
-// ── DOM refs ──
 const $ = id => document.getElementById(id);
 const uploadArea = $('uploadArea'), fileInput = $('fileInput'), fileInfo = $('fileInfo');
 const fileName = $('fileName'), fileRemove = $('fileRemove');
@@ -16,207 +13,210 @@ const scoreScroll = $('scoreScroll');
 const errorBox = $('errorBox'), errorText = $('errorText'), errorClose = $('errorClose');
 const zoomIn = $('zoomIn'), zoomOut = $('zoomOut');
 
-// ── Instrument selector ──
-document.querySelectorAll('.inst').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.inst').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedInstrument = btn.dataset.id;
-    });
-});
+const NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const FLAT = { 'C#':'Db','D#':'Eb','F#':'Gb','G#':'Ab','A#':'Bb' };
+function pc(m) { return NAMES[m%12]; }
+function mn(m) { return pc(m)+(Math.floor(m/12)-1); }
+function pp(m) { const n=pc(m); return FLAT[n]||n; }
 
-// ── File upload ──
+// ── UI: instrument, file, status ──
+document.querySelectorAll('.inst').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.inst').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    selectedInstrument = b.dataset.id;
+}));
 uploadArea.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', e => { if (e.target.files.length) setFile(e.target.files[0]); });
 uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
 uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
 uploadArea.addEventListener('drop', e => {
-    e.preventDefault();
-    uploadArea.classList.remove('drag-over');
+    e.preventDefault(); uploadArea.classList.remove('drag-over');
     if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
 });
 fileRemove.addEventListener('click', () => {
-    selectedFile = null;
-    fileInfo.style.display = 'none';
-    document.getElementById('uploadArea').style.display = '';
+    selectedFile = null; fileInfo.style.display = 'none'; uploadArea.style.display = '';
 });
-
-function setFile(file) {
-    selectedFile = file;
-    fileName.textContent = file.name;
-    document.getElementById('uploadArea').style.display = 'none';
-    fileInfo.style.display = 'flex';
-}
-
-// ── UI helpers ──
-function showStatus(msg) { statusText.textContent = msg; statusBar.style.display = 'flex'; }
+function setFile(f) { selectedFile = f; fileName.textContent = f.name; uploadArea.style.display = 'none'; fileInfo.style.display = 'flex'; }
+function showStatus(m) { statusText.textContent = m; statusBar.style.display = 'flex'; }
 function hideStatus() { statusBar.style.display = 'none'; }
-function showError(msg) { errorText.textContent = msg; errorBox.style.display = 'flex'; }
+function showError(m) { errorText.textContent = m; errorBox.style.display = 'flex'; }
 function hideError() { errorBox.style.display = 'none'; }
 errorClose.addEventListener('click', hideError);
+zoomIn.addEventListener('click', () => { zoomLevel = Math.min(2.0, +(zoomLevel+0.20).toFixed(1)); redraw(); });
+zoomOut.addEventListener('click', () => { zoomLevel = Math.max(0.4, +(zoomLevel-0.20).toFixed(1)); redraw(); });
+function redraw() { if (currentNotation) drawNotation(currentNotation); }
 
-// ── Zoom (re-render with new scale) ──
-zoomIn.addEventListener('click', () => { zoomLevel = Math.min(2.0, +(zoomLevel + 0.20).toFixed(1)); drawScore(currentNotes); });
-zoomOut.addEventListener('click', () => { zoomLevel = Math.max(0.4, +(zoomLevel - 0.20).toFixed(1)); drawScore(currentNotes); });
-
-// ── Helpers ──
-const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-function midiToPitch(midi) { return NOTE_NAMES[midi % 12]; }
-function midiToOctave(midi) { return Math.floor(midi / 12) - 1; }
-function midiToNote(midi) { return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1); }
-
-function mapDuration(sec) {
-    if (sec >= 1.5) return { code: 'w', label: '𝅝', w: 28 };
-    if (sec >= 0.75) return { code: 'h', label: '𝅗𝅥', w: 22 };
-    if (sec >= 0.40) return { code: 'q', label: '𝅘𝅥', w: 16 };
-    if (sec >= 0.20) return { code: '8', label: '𝅘𝅥𝅮', w: 14 };
-    return { code: '16', label: '𝅘𝅥𝅯', w: 12 };
-}
-
-// ── Score rendering ──
-function renderNotes(notes) {
+// ═══════════════════════════════════  DISPATCH  ═══════════════════════════════════
+function renderNotation(nd, notes) {
     hideError();
     if (!notes || !notes.length) {
         notation.innerHTML = '<div style="padding:2.5rem;color:#9ca3af;text-align:center;font-size:1.1rem">🎵 未识别到音符，请尝试其他音频</div>';
-        scoreSection.style.display = 'block';
-        noteCount.textContent = '0 个音符';
-        return;
+        scoreSection.style.display = 'block'; noteCount.textContent = '0 个音符'; currentNotation = null; return;
     }
-    currentNotes = notes;
-    noteCount.textContent = notes.length + ' 个音符';
+    currentNotation = { ...nd, raw_notes: notes };
     scoreSection.style.display = 'block';
-    drawScore(notes);
+    noteCount.textContent = notes.length + ' 个音符';
+    drawNotation(currentNotation);
+}
+function drawNotation(nd) {
+    switch (nd.type) { case 'tab': drawTAB(nd); break; case 'grand_staff': drawGrandStaff(nd); break; default: drawTrebleClef(nd); }
 }
 
-function drawScore(notes) {
-    const W = Math.max(600, notes.length * zoomLevel * 72 + 100);
-    const H = 280;
-    const PAD = 50;
-    const STAFF_TOP = 30;
-    const LINE_SPACING = 16;
-    const CLEF_WIDTH = 40;
-    const staveLeft = PAD + CLEF_WIDTH + 30;
+// ═══════════════════════════════════  TAB  ═══════════════════════════════════
+function drawTAB(nd) {
+    const strings = nd.num_strings || 6, chords = nd.chords || [], tab = nd.tab_notes || nd.fretboard || [];
+    const names = nd.tuning_names || [], N = tab.length;
+    const LH = chords.length > 0 ? 44 : 0, SG = 18, TH = strings * SG + 20, H = LH + TH + 40;
+    const ML = 70, W = Math.max(640, N * zoomLevel * 50 + ML + 50);
 
-    // Staff lines (treble clef area)
-    let html = '';
-    for (let line = 0; line < 5; line++) {
-        const y = STAFF_TOP + line * LINE_SPACING;
-        html += `<line x1="${PAD}" y1="${y}" x2="${W - PAD}" y2="${y}" stroke="#bbb" stroke-width="0.8"/>`;
+    let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+<rect width="${W}" height="${H}" fill="#fffef9"/>`;
+
+    // Chord names
+    if (chords.length) {
+        const cn = chords.map(c => c.name).join(' · ');
+        s += `<text x="${ML}" y="22" font-size="18" font-weight="bold" fill="#d97706">${cn}</text>`;
+    }
+    const top = LH + 14;
+
+    // String lines + labels
+    for (let i = 0; i < strings; i++) {
+        const y = top + i * SG;
+        s += `<line x1="${ML}" y1="${y}" x2="${W-40}" y2="${y}" stroke="#bbb" stroke-width="1"/>`;
+    }
+    if (names.length === strings) {
+        for (let i = 0; i < strings; i++) {
+            s += `<text x="${ML-14}" y="${top + i*SG + 5}" text-anchor="end" font-size="12" fill="#888">${names[i]}</text>`;
+        }
     }
 
-    // Treble clef symbol
-    html += `<text x="${PAD}" y="${STAFF_TOP + 4 * LINE_SPACING + 4}" font-size="60" fill="#555">𝄞</text>`;
-
-    // Note range for vertical mapping
-    const allMidi = notes.map(n => n.midi || 60);
-    const lo = Math.min(60, ...allMidi) - 3;   // extend to C4 at minimum
-    const hi = Math.max(72, ...allMidi) + 3;   // extend to C6 at minimum
-    const range = Math.max(hi - lo, 10);
-    const noteSpacing = Math.max(18, (W - staveLeft - PAD) / Math.max(notes.length, 1));
-    // scale note spacing with zoom
-    const xSpace = noteSpacing * zoomLevel;
-
-    // Whitenote line positions for standard staff (C4=midi60 maps to "middle C")
-    // On treble clef: E4 (64)=bottom line, F5 (77)=top line
-    // We use absolute positioning: midi → vertical offset from staff top
-    function midiY(m) {
-        // E4=64 is bottom line of treble clef (STAFF_TOP + 4*LINE_SPACING)
-        // each MIDI step = half a space (LINE_SPACING/2) downward
-        const e4y = STAFF_TOP + 4 * LINE_SPACING;
-        return e4y - (m - 64) * (LINE_SPACING / 2);
+    // Fret numbers
+    let cx = ML + 28;
+    for (let i = 0; i < N; i++) {
+        const n = tab[i], si = (n.string||1) - 1;
+        const y = top + si * SG + 5, fr = n.fret || 0;
+        cx = ML + 28 + i * zoomLevel * 48;
+        if (cx > W - 50) continue;
+        const fs = Math.max(10, 14 * zoomLevel);
+        s += `<text x="${cx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="${fs.toFixed(0)}" font-weight="bold" fill="${fr>0?'#4f6ef6':'#aaa'}">${fr}</text>`;
+        s += `<text x="${cx.toFixed(1)}" y="${top+TH-6}" text-anchor="middle" font-size="10" fill="#bbb">${mn(n.midi)}</text>`;
     }
 
-    // Draw ledger lines for extreme notes
-    const midiSet = new Set();
+    // Bar lines
+    for (let i = 4; i < N; i += 4) {
+        const bx = ML + 28 + i * zoomLevel * 48 - zoomLevel * 24;
+        s += `<line x1="${bx.toFixed(1)}" y1="${top}" y2="${top+(strings-1)*SG}" stroke="#888" stroke-width="1.2"/>`;
+    }
+    const fx = ML + 28 + N * zoomLevel * 48;
+    s += `<line x1="${fx.toFixed(1)}" y1="${top}" y2="${top+(strings-1)*SG}" stroke="#444" stroke-width="1.8"/>`;
+    s += `<line x1="${(fx+5).toFixed(1)}" y1="${top}" y2="${top+(strings-1)*SG}" stroke="#ccc" stroke-width="1.2"/>`;
+    s += footer(N, W, H);
+    notation.innerHTML = s;
+}
+
+// ═══════════════════════════════════  GRAND STAFF  ═══════════════════════════════════
+function drawGrandStaff(nd) {
+    const treb = nd.treble_notes || [], bass = nd.bass_notes || [];
+    const hasB = bass.length > 0, LG = 14, TOP = 30;
+    const H = hasB ? 400 : 240, PAD = 50, N = (nd.raw_notes||[]).length;
+    const W = Math.max(640, N * zoomLevel * 56 + 2*PAD + 80);
+
+    let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+<rect width="${W}" height="${H}" fill="#fffef9"/>`;
+
+    if (hasB) s += `<text x="${PAD}" y="${TOP+20}" font-size="90" fill="#ccc">𝄔</text>`;
+
+    // Treble staff
+    const TBOT = TOP + 4*LG;
+    s += staff5(PAD, TOP, LG, W);
+    s += `<text x="${PAD+8}" y="${TBOT+6}" font-size="52" fill="#555">𝄞</text>`;
+    s += renderNotesOnStaff(treb, PAD+44, TOP, LG, W-PAD, zoomLevel, 64);
+
+    if (hasB) {
+        const BTOP = TBOT + 56;
+        s += staff5(PAD, BTOP, LG, W);
+        s += `<text x="${PAD+10}" y="${BTOP+2*LG+6}" font-size="42" fill="#555">𝄢</text>`;
+        s += renderNotesOnStaff(bass, PAD+44, BTOP, LG, W-PAD, zoomLevel, 43);
+    }
+
+    s += footer(N, W, H);
+    notation.innerHTML = s;
+}
+
+// ═══════════════════════════════════  TREBLE CLEF  ═══════════════════════════════════
+function drawTrebleClef(nd) {
+    const notes = nd.raw_notes || nd.notes || [], LG = 16, TOP = 38, H = 250, PAD = 50;
+    const W = Math.max(640, notes.length * zoomLevel * 60 + 2*PAD + 80);
+
+    let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+<rect width="${W}" height="${H}" fill="#fffef9"/>`;
+    s += staff5(PAD, TOP, LG, W);
+    s += `<text x="${PAD+8}" y="${TOP+4*LG+6}" font-size="60" fill="#555">𝄞</text>`;
+    s += renderNotesOnStaff(notes, PAD+44, TOP, LG, W-PAD, zoomLevel, 64);
+    s += footer(notes.length, W, H);
+    notation.innerHTML = s;
+}
+
+// ── Shared helpers ──
+function staff5(x, top, gap, W) {
+    let s = '';
+    for (let i = 0; i < 5; i++) s += `<line x1="${x}" y1="${top+i*gap}" x2="${W-40}" y2="${top+i*gap}" stroke="#ccc" stroke-width="0.7"/>`;
+    return s;
+}
+
+function renderNotesOnStaff(notes, sx, top, gap, maxX, zoom, baseMidi) {
+    if (!notes.length) return '';
+    const baseY = top + 4*gap, spacing = Math.max(18, (maxX-sx-30)/notes.length) * zoom;
+    let s = '';
+
+    function ny(m) { return baseY - (m-baseMidi)*(gap/2); }
+
+    // Ledger lines (pre-compute to avoid duplicates)
+    const drawnLedger = new Set();
     notes.forEach(n => {
-        const m = n.midi;
-        const y = midiY(m);
-        // Ledger lines needed for notes below E4 or above F5
-        if (m < 64) {
-            const startLine = 64;
-            for (let lm = startLine - 2; lm >= m; lm -= 2) {
-                const marker = 'ledger_' + lm;
-                if (!midiSet.has(marker)) {
-                    midiSet.add(marker);
-                    const ly = midiY(lm);
-                    html += `<line x1="${PAD - 10}" y1="${ly}" x2="${PAD + 12}" y2="${ly}" stroke="#999" stroke-width="1"/>`;
-                }
-            }
-        }
-        if (m > 77) {
-            for (let lm = 79; lm <= m; lm += 2) {
-                const marker = 'ledger_' + lm;
-                if (!midiSet.has(marker)) {
-                    midiSet.add(marker);
-                    const ly = midiY(lm);
-                    html += `<line x1="${PAD - 10}" y1="${ly}" x2="${PAD + 12}" y2="${ly}" stroke="#999" stroke-width="1"/>`;
-                }
-            }
+        const m = n.midi||60, y = ny(m);
+        if (m < baseMidi) for (let lm = baseMidi-2; lm >= m; lm -= 2) {
+            if (!drawnLedger.has(lm)) { drawnLedger.add(lm); const ly = ny(lm);
+                s += `<line x1="${sx+12}" y1="${ly}" x2="${sx+40}" y2="${ly}" stroke="#ccc" stroke-width="0.5"/>`; }
         }
     });
 
-    // Draw notes
-    let cx = staveLeft + 20;
     notes.forEach((n, i) => {
-        const m = n.midi;
-        const dur = mapDuration(n.duration || 0.35);
-        const y = midiY(m);
-        const r = 7 * zoomLevel;
+        const m = n.midi||60, y = ny(m), r = 6.5*zoom;
+        const cx = sx + 28 + i*spacing;
+        if (cx > maxX) return;
 
-        // Note head
-        html += `<ellipse cx="${cx.toFixed(1)}" cy="${y.toFixed(1)}" rx="${r}" ry="${(r * 0.72).toFixed(1)}" fill="#4f6ef6" stroke="#3040cc" stroke-width="${(1.2 * zoomLevel).toFixed(1)}"/>`;
+        s += `<ellipse cx="${cx.toFixed(1)}" cy="${y.toFixed(1)}" rx="${r}" ry="${(r*0.72).toFixed(1)}" fill="#4f6ef6" stroke="#3344cc" stroke-width="${(1.2*zoom).toFixed(1)}"/>`;
 
-        // Stem
-        if (y > STAFF_TOP + 2 * LINE_SPACING) {
-            html += `<line x1="${(cx + r).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(cx + r).toFixed(1)}" y2="${(y - 38 * zoomLevel).toFixed(1)}" stroke="#444" stroke-width="${(1.5 * zoomLevel).toFixed(1)}"/>`;
-        } else {
-            html += `<line x1="${(cx - r).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(cx - r).toFixed(1)}" y2="${(y + 38 * zoomLevel).toFixed(1)}" stroke="#444" stroke-width="${(1.5 * zoomLevel).toFixed(1)}"/>`;
-        }
+        const sh = 34*zoom;
+        if (y > baseY-2*gap) s += `<line x1="${(cx+r).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(cx+r).toFixed(1)}" y2="${(y-sh).toFixed(1)}" stroke="#444" stroke-width="${(1.4*zoom).toFixed(1)}"/>`;
+        else s += `<line x1="${(cx-r).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(cx-r).toFixed(1)}" y2="${(y+sh).toFixed(1)}" stroke="#444" stroke-width="${(1.4*zoom).toFixed(1)}"/>`;
 
-        // Accidental
-        const pitchClass = midiToPitch(m);
-        if (pitchClass.includes('#')) {
-            html += `<text x="${(cx - r * 2.2).toFixed(1)}" y="${(y + 6 * zoomLevel).toFixed(1)}" font-size="${(20 * zoomLevel).toFixed(1)}" fill="#d97706">♯</text>`;
-        } else if (pitchClass.includes('b')) {
-            html += `<text x="${(cx - r * 2.2).toFixed(1)}" y="${(y + 6 * zoomLevel).toFixed(1)}" font-size="${(20 * zoomLevel).toFixed(1)}" fill="#d97706">♭</text>`;
-        }
-
-        // Pitch label below
-        const label = midiToNote(m);
-        html += `<text x="${cx.toFixed(1)}" y="${(H - 16).toFixed(1)}" text-anchor="middle" font-size="${(12 * zoomLevel).toFixed(0)}" fill="#888">${label}</text>`;
-
-        cx += xSpace;
+        const p = pc(m);
+        if (p.includes('#')) s += `<text x="${(cx-r*2.5).toFixed(1)}" y="${(y+5*zoom).toFixed(1)}" font-size="${(18*zoom).toFixed(0)}" fill="#d97706">♯</text>`;
+        else if (p.includes('b')) s += `<text x="${(cx-r*2.5).toFixed(1)}" y="${(y+5*zoom).toFixed(1)}" font-size="${(18*zoom).toFixed(0)}" fill="#d97706">♭</text>`;
     });
 
-    // Bar lines every 4 notes
-    const barInterval = xSpace * 4;
-    if (notes.length > 4) {
-        for (let i = 4; i < notes.length; i += 4) {
-            const bx = staveLeft + 20 + i * xSpace - xSpace / 2;
-            html += `<line x1="${bx.toFixed(1)}" y1="${STAFF_TOP}" y2="${STAFF_TOP + 4 * LINE_SPACING}" stroke="#555" stroke-width="1.5"/>`;
-        }
+    // Bar lines
+    for (let i = 4; i < notes.length; i += 4) {
+        const bx = sx + 28 + i*spacing - spacing/2;
+        s += `<line x1="${bx.toFixed(1)}" y1="${top}" y2="${top+4*gap}" stroke="#888" stroke-width="1.2"/>`;
     }
-    // Final barline
-    const finalX = staveLeft + 20 + notes.length * xSpace;
-    html += `<line x1="${finalX.toFixed(1)}" y1="${STAFF_TOP}" y2="${STAFF_TOP + 4 * LINE_SPACING}" stroke="#333" stroke-width="2"/>`;
-    html += `<line x1="${(finalX + 6).toFixed(1)}" y1="${STAFF_TOP}" y2="${STAFF_TOP + 4 * LINE_SPACING}" stroke="#999" stroke-width="1.5"/>`;
-
-    // Build SVG
-    notation.innerHTML = `<svg width="${W.toFixed(0)}" height="${H}" viewBox="0 0 ${W.toFixed(0)} ${H}" xmlns="http://www.w3.org/2000/svg">
-        <rect width="${W}" height="${H}" fill="#fffef9"/>
-        ${html}
-    </svg>`;
-
-    // Scroll to see full score
-    scoreScroll.scrollLeft = 0;
+    const fx = sx + 28 + notes.length*spacing;
+    s += `<line x1="${fx.toFixed(1)}" y1="${top}" y2="${top+4*gap}" stroke="#444" stroke-width="1.8"/>`;
+    s += `<line x1="${(fx+5).toFixed(1)}" y1="${top}" y2="${top+4*gap}" stroke="#ccc" stroke-width="1.2"/>`;
+    return s;
 }
 
-// ── API calls ──
+function footer(n, W, H) {
+    return `<text x="${W/2}" y="${H-14}" text-anchor="middle" font-size="11" fill="#ccc">${n} notes · zoom ${Math.round(zoomLevel*100)}%</text></svg>`;
+}
+
+// ═══════════════════════════════════  API  ═══════════════════════════════════
 
 async function transcribe() {
     if (!selectedFile) { showError('请先选择音频文件'); return; }
-    hideError();
-    showStatus('AI 转写中… 音频越长耗时越久，请耐心等待');
+    hideError(); showStatus('AI 转写中… 音频越长耗时越久');
 
     const fd = new FormData();
     fd.append('file', selectedFile);
@@ -226,81 +226,66 @@ async function transcribe() {
 
     try {
         const res = await fetch(API + '/transcribe', { method: 'POST', body: fd });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ detail: '服务器错误 ' + res.status }));
-            throw new Error(err.detail || 'HTTP ' + res.status);
-        }
+        if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail||'HTTP '+res.status); }
         const data = await res.json();
         sourceInstrument = data.instrument || selectedInstrument;
-        zoomLevel = 1;
-        hideStatus();
-        renderNotes(data.notes || []);
-        const shown = data.notes?.length || 0;
-        const full = data.full_note_count || data.note_count || shown;
-        if (shown < full) noteCount.textContent = shown + ' / ' + full + ' 个音符';
-    } catch (e) {
-        hideStatus();
-        showError('转写失败：' + e.message);
-        console.error(e);
-    }
+        zoomLevel = 1; hideStatus();
+        renderNotation(data.notation, data.notes||[]);
+    } catch(e) { hideStatus(); showError('转写失败：'+e.message); }
 }
 
 async function convertInstrument() {
-    if (!currentNotes.length) { showError('请先完成 AI 转写'); return; }
+    const n = currentNotation?.raw_notes;
+    if (!n?.length) { showError('请先完成 AI 转写'); return; }
     const target = selectedInstrument;
-    showStatus('转换 ' + sourceInstrument + ' → ' + target + '…');
+    showStatus('转换 '+sourceInstrument+' → '+target+'…');
 
     const fd = new FormData();
     fd.append('source_id', sourceInstrument);
     fd.append('target_id', target);
-    fd.append('notes', JSON.stringify(currentNotes));
+    fd.append('notes', JSON.stringify(n));
 
     try {
         const res = await fetch(API + '/convert', { method: 'POST', body: fd });
-        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'HTTP ' + res.status); }
+        if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail||'HTTP '+res.status); }
         const data = await res.json();
-        zoomLevel = 1;
-        hideStatus();
-        renderNotes(data.notes || []);
-        sourceInstrument = target;
-        if (data.removed_notes) noteCount.textContent += ' · ' + data.removed_notes + ' 个超音域移除';
-    } catch (e) {
-        hideStatus();
-        showError('转换失败：' + e.message);
-        console.error(e);
+        zoomLevel = 1; hideStatus(); sourceInstrument = target;
+        const localNd = localNotation(data.notes||[], target);
+        renderNotation(localNd, data.notes||[]);
+        if (data.removed_notes) noteCount.textContent += ' · '+data.removed_notes+' 超音域移除';
+    } catch(e) { hideStatus(); showError('转换失败：'+e.message); }
+}
+
+function localNotation(notes, inst) {
+    if (['guitar','ukulele'].includes(inst)) return { type: 'treble_clef', raw_notes: notes };
+    if (['piano','harp'].includes(inst)) {
+        const mid = inst==='harp'?48:60;
+        return { type: 'grand_staff', treble_notes: notes.filter(n=>n.midi>=mid), bass_notes: notes.filter(n=>n.midi<mid), raw_notes: notes };
     }
+    return { type: 'treble_clef', raw_notes: notes };
 }
 
 async function exportMidi() {
-    if (!currentNotes.length) { showError('请先完成 AI 转写'); return; }
+    const n = currentNotation?.raw_notes;
+    if (!n?.length) { showError('请先完成 AI 转写'); return; }
     showStatus('导出 MIDI 中…');
 
     const fd = new FormData();
     fd.append('source_id', sourceInstrument);
     fd.append('target_id', sourceInstrument);
-    fd.append('notes', JSON.stringify(currentNotes));
+    fd.append('notes', JSON.stringify(n));
 
     try {
         const res = await fetch(API + '/convert-midi', { method: 'POST', body: fd });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        downloadBlob(await res.blob(), 'scoreflow_' + sourceInstrument + '_' + Date.now() + '.mid');
+        if (!res.ok) throw new Error('HTTP '+res.status);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(await res.blob());
+        a.download = 'scoreflow_'+sourceInstrument+'_'+Date.now()+'.mid';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
         hideStatus();
-    } catch (e) {
-        hideStatus();
-        showError('导出失败：' + e.message);
-        console.error(e);
-    }
+    } catch(e) { hideStatus(); showError('导出失败：'+e.message); }
 }
 
-function downloadBlob(blob, name) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a);
-}
-
-// ── Events ──
 transcribeBtn.addEventListener('click', transcribe);
 convertBtn.addEventListener('click', convertInstrument);
 exportBtn.addEventListener('click', exportMidi);
