@@ -20,15 +20,13 @@ def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
     """
     tk = verovio.toolkit()
     tk.setOptions({
-        "scale": int(zoom * 40),          # Verovio scale (40=100%)
-        "pageWidth": 0,                    # 0 = auto, no page breaks
-        "pageHeight": 0,
+        "scale": int(zoom * 40),
         "adjustPageWidth": True,
         "adjustPageHeight": True,
-        "breaks": "none",                  # No system breaks — continuous
-        "spacingLinear": 0.25,             # Tighter spacing
+        "breaks": "none",
+        "spacingLinear": 0.25,
         "spacingNonLinear": 0.6,
-        "font": "Leipzig",                 # SMuFL font
+        "font": "Leipzig",
         "footer": "none",
         "header": "none",
     })
