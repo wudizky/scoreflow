@@ -269,9 +269,8 @@ body {
 .render-badge.osmd { background: #dbeafe; color: #1d4ed8; }
 .render-badge.svg { background: #f3f4f6; color: #6b7280; }
 
-/* ── OSMD container ── */
-#osmdContainer { display: none; }
-#osmdContainer svg { max-width: 100%; height: auto; }
+/* ── Verovio SVG display ── */
+.score-render svg { max-width: none; height: auto; display: block; }
 
 /* ── Score Section ── */
 .score-section {

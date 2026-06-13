@@ -45,6 +45,9 @@ RUN pip install --no-cache-dir --no-deps basic-pitch==0.4.0 && \
     'pretty-midi>=0.2.9' \
     'resampy>=0.2.2,<0.4.3'
 
+# Verovio: professional music notation engraving (MusicXML → SVG)
+RUN pip install --no-cache-dir verovio>=4.3.0
+
 # ── Stage 2: preload ML models into the image ──
 COPY preload_models.py /app/preload_models.py
 RUN python /app/preload_models.py

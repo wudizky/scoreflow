@@ -133,23 +133,17 @@ async def transcribe_audio(
             output_format=output_format,
         )
         notes = result.get("notes", [])
-
-        # Notation rendering data (chords, TAB, grand staff split)
         result["notation"] = build_notation_data(notes, instrument)
-
-        # Full MusicXML string for OSMD professional rendering
-        musicxml_path = result.get("musicxml_path")
-        if musicxml_path and os.path.exists(musicxml_path):
-            with open(musicxml_path, "r", encoding="utf-8") as f:
-                result["musicxml"] = f.read()
-        else:
-            # Generate on-the-fly if file not written
-            result["musicxml"] = _generate_musicxml_string(notes, instrument)
-
-        # Clean up large file paths (not needed by frontend)
-        result.pop("output_path", None)
-        result.pop("pdf_path", None)
-
+        musicxml = result.get("musicxml")
+        if not musicxml:
+            musicxml = _generate_musicxml_string(notes, instrument)
+        result["musicxml"] = musicxml
+        # Server-side SVG render via Verovio (professional engraving)
+        try:
+            from app.core.notation_renderer import render_musicxml_to_svg
+            result["svg"] = render_musicxml_to_svg(musicxml)
+        except Exception as e:
+            result["svg_error"] = str(e)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -177,22 +171,23 @@ async def convert_score(
 
     converted = converter.convert_notes(note_data, source_id, target_id)
     active_notes = [n for n in converted if not n.get("removed")]
-
-    # Include notation data for target instrument (P1 fix)
     notation = build_notation_data(active_notes, target_id)
-
-    # Generate MusicXML for target instrument
     musicxml = _generate_musicxml_string(active_notes, target_id)
-
+    svg = None
+    try:
+        from app.core.notation_renderer import render_musicxml_to_svg
+        svg = render_musicxml_to_svg(musicxml)
+    except Exception:
+        pass
     return {
         "source_id": source_id,
         "target_id": target_id,
         "note_count": len(converted),
         "notes": active_notes,
-        "full_notes": converted,
         "removed_notes": sum(1 for n in converted if n.get("removed")),
         "notation": notation,
         "musicxml": musicxml,
+        "svg": svg,
     }
 
 
