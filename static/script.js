@@ -66,50 +66,58 @@ function drawNotation(nd) {
 function drawTAB(nd) {
     const strings = nd.num_strings || 6, chords = nd.chords || [], tab = nd.tab_notes || nd.fretboard || [];
     const names = nd.tuning_names || [], N = tab.length;
-    const LH = chords.length > 0 ? 44 : 0, SG = 18, TH = strings * SG + 20, H = LH + TH + 40;
-    const ML = 70, W = Math.max(640, N * zoomLevel * 50 + ML + 50);
+    const SG = 20;  // string gap (wider for readability)
+    const TH = strings * SG + 30;  // total TAB height
+    const SP = 50;  // spacing between chord bars
+
+    // Layout: chords on top (stacked), then TAB
+    const chordRows = chords.length ? 1 : 0;
+    const chordH = chordRows * 56;
+    const top = 20 + chordH;
+    const H = top + TH + 50;
+    const ML = 70, MR = 50;
+    const W = Math.max(680, N * zoomLevel * 52 + ML + MR);
 
     let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
 <rect width="${W}" height="${H}" fill="#fffef9"/>`;
 
-    // Chord names
+    // ── Chord header ──
     if (chords.length) {
-        const cn = chords.map(c => c.name).join(' · ');
-        s += `<text x="${ML}" y="22" font-size="18" font-weight="bold" fill="#d97706">${cn}</text>`;
+        const labels = chords.map(c => c.name).join(' · ');
+        s += `<text x="${ML}" y="26" font-size="18" font-weight="bold" fill="#d97706">🎸 ${labels}</text>`;
     }
-    const top = LH + 14;
 
-    // String lines + labels
+    // ── TAB lines ──
     for (let i = 0; i < strings; i++) {
-        const y = top + i * SG;
-        s += `<line x1="${ML}" y1="${y}" x2="${W-40}" y2="${y}" stroke="#bbb" stroke-width="1"/>`;
+        const y = top + i * SG + 6;
+        s += `<line x1="${ML}" y1="${y}" x2="${W-MR}" y2="${y}" stroke="#bbb" stroke-width="1"/>`;
     }
+    // Tuning labels on left
     if (names.length === strings) {
         for (let i = 0; i < strings; i++) {
-            s += `<text x="${ML-14}" y="${top + i*SG + 5}" text-anchor="end" font-size="12" fill="#888">${names[i]}</text>`;
+            s += `<text x="${ML-14}" y="${top + i*SG + 11}" text-anchor="end" font-size="13" fill="#888">${names[i]}</text>`;
         }
     }
 
-    // Fret numbers
-    let cx = ML + 28;
+    // ── Fret numbers ──
+    let cx = ML + 32;
     for (let i = 0; i < N; i++) {
         const n = tab[i], si = (n.string||1) - 1;
-        const y = top + si * SG + 5, fr = n.fret || 0;
-        cx = ML + 28 + i * zoomLevel * 48;
-        if (cx > W - 50) continue;
-        const fs = Math.max(10, 14 * zoomLevel);
-        s += `<text x="${cx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="${fs.toFixed(0)}" font-weight="bold" fill="${fr>0?'#4f6ef6':'#aaa'}">${fr}</text>`;
-        s += `<text x="${cx.toFixed(1)}" y="${top+TH-6}" text-anchor="middle" font-size="10" fill="#bbb">${mn(n.midi)}</text>`;
+        const y = top + si * SG + 11, fr = n.fret || 0;
+        cx = ML + 32 + i * zoomLevel * 50;
+        if (cx > W - MR - 10) continue;
+        const fs = Math.max(11, 15 * zoomLevel);
+        s += `<text x="${cx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="${fs.toFixed(0)}" font-weight="bold" fill="${fr>0?'#4f6ef6':'#b0b0b0'}">${fr}</text>`;
     }
 
-    // Bar lines
+    // ── Bar lines ──
     for (let i = 4; i < N; i += 4) {
-        const bx = ML + 28 + i * zoomLevel * 48 - zoomLevel * 24;
-        s += `<line x1="${bx.toFixed(1)}" y1="${top}" y2="${top+(strings-1)*SG}" stroke="#888" stroke-width="1.2"/>`;
+        const bx = ML + 32 + i * zoomLevel * 50 - zoomLevel * 25;
+        if (bx < W - MR) s += `<line x1="${bx.toFixed(1)}" y1="${top+6}" y2="${top+(strings-1)*SG+6}" stroke="#999" stroke-width="1.2"/>`;
     }
-    const fx = ML + 28 + N * zoomLevel * 48;
-    s += `<line x1="${fx.toFixed(1)}" y1="${top}" y2="${top+(strings-1)*SG}" stroke="#444" stroke-width="1.8"/>`;
-    s += `<line x1="${(fx+5).toFixed(1)}" y1="${top}" y2="${top+(strings-1)*SG}" stroke="#ccc" stroke-width="1.2"/>`;
+    const fx = Math.min(ML + 32 + N * zoomLevel * 50, W - MR);
+    s += `<line x1="${fx.toFixed(1)}" y1="${top+6}" y2="${top+(strings-1)*SG+6}" stroke="#444" stroke-width="2"/>`;
+
     s += footer(N, W, H);
     notation.innerHTML = s;
 }
@@ -117,26 +125,34 @@ function drawTAB(nd) {
 // ═══════════════════════════════════  GRAND STAFF  ═══════════════════════════════════
 function drawGrandStaff(nd) {
     const treb = nd.treble_notes || [], bass = nd.bass_notes || [];
-    const hasB = bass.length > 0, LG = 14, TOP = 30;
-    const H = hasB ? 400 : 240, PAD = 50, N = (nd.raw_notes||[]).length;
-    const W = Math.max(640, N * zoomLevel * 56 + 2*PAD + 80);
+    const hasB = bass.length > 0, LG = 14;
+    const PAD = 50, N = (nd.raw_notes||[]).length;
+    const W = Math.max(700, N * zoomLevel * 56 + 2*PAD + 100);
+
+    const staffH = 5 * LG + 30;
+    const gap = hasB ? 50 : 20;
+    const H = 40 + staffH + (hasB ? gap + staffH : 0) + 40;
 
     let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
 <rect width="${W}" height="${H}" fill="#fffef9"/>`;
 
-    if (hasB) s += `<text x="${PAD}" y="${TOP+20}" font-size="90" fill="#ccc">𝄔</text>`;
+    const trebTop = 30;
+    // Brace
+    if (hasB) {
+        s += `<text x="${PAD}" y="${trebTop+18}" font-size="90" fill="#ccc">𝄔</text>`;
+    }
 
-    // Treble staff
-    const TBOT = TOP + 4*LG;
-    s += staff5(PAD, TOP, LG, W);
-    s += `<text x="${PAD+8}" y="${TBOT+6}" font-size="52" fill="#555">𝄞</text>`;
-    s += renderNotesOnStaff(treb, PAD+44, TOP, LG, W-PAD, zoomLevel, 64);
+    // Treble
+    const trebBot = trebTop + 4*LG;
+    s += staff5(PAD, trebTop, LG, W);
+    s += `<text x="${PAD+6}" y="${trebBot+6}" font-size="52" fill="#555">𝄞</text>`;
+    s += renderNotesOnStaff(treb, PAD+44, trebTop, LG, W-PAD-30, zoomLevel, 64);
 
     if (hasB) {
-        const BTOP = TBOT + 56;
-        s += staff5(PAD, BTOP, LG, W);
-        s += `<text x="${PAD+10}" y="${BTOP+2*LG+6}" font-size="42" fill="#555">𝄢</text>`;
-        s += renderNotesOnStaff(bass, PAD+44, BTOP, LG, W-PAD, zoomLevel, 43);
+        const bassTop = trebBot + gap;
+        s += staff5(PAD, bassTop, LG, W);
+        s += `<text x="${PAD+8}" y="${bassTop+2*LG+6}" font-size="42" fill="#555">𝄢</text>`;
+        s += renderNotesOnStaff(bass, PAD+44, bassTop, LG, W-PAD-30, zoomLevel, 43);
     }
 
     s += footer(N, W, H);
@@ -145,15 +161,17 @@ function drawGrandStaff(nd) {
 
 // ═══════════════════════════════════  TREBLE CLEF  ═══════════════════════════════════
 function drawTrebleClef(nd) {
-    const notes = nd.raw_notes || nd.notes || [], LG = 16, TOP = 38, H = 250, PAD = 50;
-    const W = Math.max(640, notes.length * zoomLevel * 60 + 2*PAD + 80);
+    const notes = nd.raw_notes || nd.notes || [], N = notes.length;
+    const LG = 16, PAD = 50;
+    const H = 260,  // tall enough for ledger lines
+    const W = Math.max(700, N * zoomLevel * 60 + 2*PAD + 80);
 
     let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
 <rect width="${W}" height="${H}" fill="#fffef9"/>`;
-    s += staff5(PAD, TOP, LG, W);
-    s += `<text x="${PAD+8}" y="${TOP+4*LG+6}" font-size="60" fill="#555">𝄞</text>`;
-    s += renderNotesOnStaff(notes, PAD+44, TOP, LG, W-PAD, zoomLevel, 64);
-    s += footer(notes.length, W, H);
+    s += staff5(PAD, 48, LG, W);
+    s += `<text x="${PAD+6}" y="${48+4*LG+6}" font-size="60" fill="#555">𝄞</text>`;
+    s += renderNotesOnStaff(notes, PAD+44, 48, LG, W-PAD-30, zoomLevel, 64);
+    s += footer(N, W, H);
     notation.innerHTML = s;
 }
 

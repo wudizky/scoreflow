@@ -205,20 +205,25 @@ body {
     border-radius: 20px;
 }
 
-/* Scrollable score */
+/* Scrollable score — Word-style bidirectional scroll */
 .score-scroll {
-    overflow-x: auto;
-    overflow-y: hidden;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: #fffef9;
-    padding: 1rem;
-    min-height: 180px;
+    padding: 1.5rem;
+    max-height: 520px;
+    min-height: 220px;
+    overflow: auto;
     -webkit-overflow-scrolling: touch;
+    /* Show scrollbar hints */
+    scrollbar-width: thin;
+    scrollbar-color: #c4c4c4 transparent;
 }
-.score-scroll::-webkit-scrollbar { height: 6px; }
-.score-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+.score-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.score-scroll::-webkit-scrollbar-thumb { background: #c4c4c4; border-radius: 4px; }
+.score-scroll::-webkit-scrollbar-thumb:hover { background: #999; }
 .score-scroll::-webkit-scrollbar-track { background: transparent; }
+.score-scroll::-webkit-scrollbar-corner { background: transparent; }
 
 .score-render {
     min-width: 600px;
