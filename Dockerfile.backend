@@ -2,10 +2,9 @@
 # Python 3.12 required: TensorFlow/PyTorch not compatible with 3.13+
 FROM python:3.12-slim
 
-# System dependencies: ffmpeg is essential for MP3/M4A/FLAC decoding
-# (librosa falls back to audioread without it → corrupt/incomplete audio)
+# System dependencies
+# ffmpeg installed at runtime on ECS (avoids local Docker Desktop OOM)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
     libsndfile1 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*

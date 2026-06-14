@@ -218,6 +218,45 @@ async def convert_and_export_midi(
     )
 
 
+@router.post("/export-pdf")
+async def export_pdf(
+    notes: str = Form(...),
+    instrument: str = Form("piano"),
+):
+    """Render transcribed notes as PDF sheet music via Verovio + cairosvg."""
+    import json, tempfile
+    try:
+        note_data = json.loads(notes)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid notes JSON")
+
+    if not note_data:
+        raise HTTPException(status_code=400, detail="No notes to export")
+
+    musicxml = _generate_musicxml_string(note_data, instrument)
+
+    try:
+        from app.core.notation_renderer import render_musicxml_to_svg
+        svg_str = render_musicxml_to_svg(musicxml, zoom=1.0)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SVG render failed: {e}")
+
+    output_path = UPLOAD_DIR / f"score_{uuid.uuid4().hex[:8]}.pdf"
+    try:
+        import cairosvg
+        cairosvg.svg2pdf(bytestring=svg_str.encode("utf-8"), write_to=str(output_path))
+    except ImportError:
+        raise HTTPException(status_code=500, detail="cairosvg not installed on server")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF conversion failed: {e}")
+
+    return FileResponse(
+        str(output_path),
+        media_type="application/pdf",
+        filename=f"scoreflow_{instrument}_{uuid.uuid4().hex[:6]}.pdf",
+    )
+
+
 @router.post("/audio-to-converted")
 async def transcribe_and_convert(
     file: UploadFile = File(...),

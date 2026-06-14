@@ -6,7 +6,8 @@ let currentNotes = null, zoomLevel = 1;
 const $ = id => document.getElementById(id);
 const uploadArea = $('uploadArea'), fileInput = $('fileInput'), fileInfo = $('fileInfo');
 const fileName = $('fileName'), fileRemove = $('fileRemove');
-const transcribeBtn = $('transcribeBtn'), convertBtn = $('convertBtn'), exportBtn = $('exportBtn');
+const transcribeBtn = $('transcribeBtn'), convertBtn = $('convertBtn');
+const exportMidiBtn = $('exportMidiBtn'), exportPdfBtn = $('exportPdfBtn');
 const progressBar = $('progressBar'), progressLabel = $('progressLabel');
 const scoreSection = $('scoreSection'), notation = $('notation'), noteCount = $('noteCount');
 const scoreScroll = $('scoreScroll'), chordBar = $('chordBar'), renderBadge = $('renderBadge');
@@ -151,6 +152,22 @@ async function exportMidi() {
     } catch(e) { showError('导出失败：'+e.message); }
 }
 
+async function exportPdf() {
+    if (!currentNotes?.length) { showError('请先完成 AI 转写'); return; }
+    const fd = new FormData();
+    fd.append('instrument', sourceInstrument);
+    fd.append('notes', JSON.stringify(currentNotes));
+    try {
+        const res = await fetch(API+'/export-pdf',{method:'POST',body:fd});
+        if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.detail||'HTTP '+res.status); }
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(await res.blob());
+        a.download='scoreflow_'+sourceInstrument+'_'+Date.now()+'.pdf';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    } catch(e) { showError('PDF导出失败：'+e.message); }
+}
+
 transcribeBtn.addEventListener('click', transcribe);
 convertBtn.addEventListener('click', convertInstrument);
-exportBtn.addEventListener('click', exportMidi);
+exportMidiBtn.addEventListener('click', exportMidi);
+exportPdfBtn.addEventListener('click', exportPdf);
