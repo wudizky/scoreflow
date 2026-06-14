@@ -30,11 +30,12 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api/v1")
 
-# Serve uploads directory
-uploads_dir = Path(__file__).parent / "uploads"
-uploads_dir.mkdir(exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
-
+# Ensure uploads directory exists (volume-mountable path)
+_uploads_static = Path(__file__).parent.parent / "uploads"
+try:
+    _uploads_static.mkdir(exist_ok=True)
+except OSError:
+    pass
 
 @app.get("/health")
 async def health():
