@@ -3,10 +3,17 @@
 FROM python:3.12-slim
 
 # System dependencies
-# ffmpeg installed at runtime on ECS (avoids local Docker Desktop OOM)
+# ffmpeg: MP3/M4A/FLAC decoding (librosa falls back to audioread without it)
+# Cairo + Pango: PDF export via cairosvg (renders Verovio SVG → PDF)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
     libsndfile1 \
     libgomp1 \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf2.0-0 \
+    shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

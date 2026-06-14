@@ -110,6 +110,9 @@ async function transcribe() {
     const fd = new FormData();
     fd.append('file', selectedFile); fd.append('instrument', selectedInstrument);
     fd.append('output_format', 'musicxml');
+    // Demucs toggle
+    const useDemucs = document.getElementById('demucsToggle')?.checked;
+    fd.append('separate_stems', useDemucs ? 'true' : 'false');
     try {
         const res = await fetch(API+'/transcribe',{method:'POST',body:fd});
         const data = await res.json();

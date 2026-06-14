@@ -60,7 +60,9 @@ class TranscriptionService:
 
         # Step 2: AMT - convert audio to notes
         try:
-            notes = self.amt.transcribe(processing_path)
+            notes = self.amt.transcribe(processing_path,
+                                        separate_stems=separate_stems,
+                                        instrument=instrument)
             result["note_count"] = len(notes)
             result["notes"] = notes[:500]  # Limit payload size
             result["full_note_count"] = len(notes)

@@ -156,6 +156,13 @@ body {
 }
 .btn-sm:hover { background: var(--primary-light); }
 
+/* Demucs toggle */
+.demucs-toggle { text-align: center; margin-bottom: 1.2rem; }
+.toggle-label { cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-secondary); }
+.toggle-label input { width: 16px; height: 16px; accent-color: var(--primary); }
+.toggle-text { font-weight: 600; }
+.toggle-hint { font-size: 0.75rem; color: #9ca3af; }
+
 /* Status Bar */
 .status-bar {
     display: flex;

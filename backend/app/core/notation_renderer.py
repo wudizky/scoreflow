@@ -11,24 +11,32 @@ import os
 def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
     """Render MusicXML string to SVG using Verovio engraver.
 
-    Args:
-        musicxml: Valid MusicXML string.
-        zoom: Scale factor (0.5-2.0).
-
-    Returns:
-        SVG string ready for direct HTML injection.
+    Uses auto line-breaking like a word processor — notes wrap to
+    the next system when they hit the page width, creating a
+    waterfall-style readable score.
     """
     tk = verovio.toolkit()
     tk.setOptions({
-        "scale": int(zoom * 55),           # 55 = readable default (40 is too small)
-        "adjustPageWidth": True,
-        "adjustPageHeight": True,
-        "breaks": "none",
+        "scale": int(zoom * 55),
+        # ── Layout: auto line-breaking ──
+        "breaks": "auto",           # Verovio decides where to break lines
+        "ignoreLayout": 1,          # Discard any MusicXML layout hints, re-layout fresh
+        "pageWidth": 2100,          # ~A4 width in Verovio units
+        "pageHeight": 60000,        # Very tall → single continuous page
+        "pageMarginTop": 40,
+        "pageMarginBottom": 40,
+        "pageMarginLeft": 60,
+        "pageMarginRight": 60,
+        # ── Spacing ──
         "spacingLinear": 0.25,
         "spacingNonLinear": 0.6,
+        "spacingStaff": 6,
+        "spacingSystem": 10,
+        # ── Style ──
         "font": "Leipzig",
         "footer": "none",
         "header": "none",
+        "lyricSize": 4,
     })
     tk.loadData(musicxml)
     svg = tk.renderToSVG(1)
@@ -36,10 +44,7 @@ def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
 
 
 def render_notes_to_svg(notes: list[dict], instrument: str, zoom: float = 1.0) -> str | None:
-    """Generate MusicXML from notes and render to SVG.
-
-    Returns SVG string or None if generation fails.
-    """
+    """Generate MusicXML from notes and render to SVG."""
     from app.core.musicxml_generator import MusicXMLGenerator
     import tempfile, uuid
 

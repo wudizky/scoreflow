@@ -34,19 +34,116 @@ class AMTEngine:
         except ImportError:
             pass
 
-    def transcribe(self, audio_path: str) -> list[dict]:
+    def transcribe(self, audio_path: str, separate_stems: bool = False, instrument: str = "guitar") -> list[dict]:
         """Transcribe audio to list of note events.
+
+        Args:
+            audio_path: Path to audio file.
+            separate_stems: If True, run Demucs source separation before AMT
+                           (removes drums/vocals → cleaner pitch detection).
+            instrument: Target instrument for stem selection.
 
         Returns list of dicts with: midi, start, duration, velocity, confidence.
         """
+        processing_path = audio_path
+
+        # ── Step 0: Demucs source separation (optional, improves accuracy) ──
+        if separate_stems:
+            separated = self._separate_stems(audio_path, instrument)
+            if separated:
+                processing_path = separated
+
+        # ── Step 1: AMT ──
         if self.basic_pitch_available:
-            return self._transcribe_basic_pitch(audio_path)
+            raw_notes = self._transcribe_basic_pitch(processing_path)
         elif self.crepe_available:
-            return self._transcribe_crepe(audio_path)
+            raw_notes = self._transcribe_crepe(processing_path)
         elif self.librosa_available:
-            return self._transcribe_librosa(audio_path)
+            raw_notes = self._transcribe_librosa(processing_path)
         else:
-            return self._transcribe_dummy(audio_path)
+            raw_notes = self._transcribe_dummy(processing_path)
+
+        # ── Step 2: MIDI quantization (cleans up ghost notes & timing jitter) ──
+        if raw_notes:
+            raw_notes = self._quantize_notes(raw_notes)
+
+        return raw_notes
+
+    def _separate_stems(self, audio_path: str, instrument: str) -> Optional[str]:
+        """Run Demucs source separation, return path to best stem.
+
+        Separating out drums/vocals before AMT dramatically reduces
+        ghost notes from percussive transients.
+        """
+        try:
+            from demucs import separate
+            import tempfile
+
+            out_dir = tempfile.mkdtemp(prefix="demucs_")
+            separate.main([
+                "--out", out_dir,
+                "--two-stems", "drums",  # Quick 2-stem: melody vs drums
+                audio_path,
+            ])
+
+            # Find the "no_drums" stem (or "other" if using full 4-stem)
+            import pathlib
+            base = os.path.splitext(os.path.basename(audio_path))[0]
+            candidates = list(pathlib.Path(out_dir).rglob(f"**/{base}/no_drums.wav"))
+            if not candidates:
+                candidates = list(pathlib.Path(out_dir).rglob("*.wav"))
+
+            if candidates:
+                return str(candidates[0])
+        except Exception:
+            pass
+
+        return None
+
+    def _quantize_notes(self, notes: list[dict], grid_16th: float = 0.125) -> list[dict]:
+        """Quantize note onsets to nearest 16th-note grid and filter noise.
+
+        This eliminates AI jitter (like 1/64 note fragments) and ghost notes
+        that are too short or too quiet.
+        """
+        if not notes:
+            return []
+
+        import numpy as np
+
+        # ── Filter 1: Remove extremely short notes (< 40ms = noise) ──
+        min_dur = 0.04
+        notes = [n for n in notes if n.get("duration", 0) >= min_dur]
+
+        # ── Filter 2: Remove very quiet notes (velocity < 15) ──
+        notes = [n for n in notes if n.get("velocity", 80) >= 15]
+
+        # ── Filter 3: Remove low-confidence notes (< 0.2) ──
+        notes = [n for n in notes if n.get("confidence", 1.0) >= 0.2]
+
+        # ── Quantize onsets to 16th note grid ──
+        for n in notes:
+            start = n.get("start", 0)
+            # Snap to nearest 16th note
+            quantized = round(start / grid_16th) * grid_16th
+            n["start"] = round(quantized, 3)
+            # Also snap duration
+            dur = n.get("duration", grid_16th)
+            quantized_dur = max(grid_16th, round(dur / grid_16th) * grid_16th)
+            n["duration"] = round(quantized_dur, 3)
+
+        # ── Filter 4: Merge duplicate notes at same onset + pitch ──
+        notes.sort(key=lambda n: (n["start"], n.get("midi", 60)))
+        deduped = []
+        for n in notes:
+            if deduped and abs(deduped[-1]["start"] - n["start"]) < 0.02 and deduped[-1]["midi"] == n["midi"]:
+                # Keep the one with higher velocity/confidence
+                if n.get("velocity", 0) > deduped[-1].get("velocity", 0):
+                    deduped[-1] = n
+                continue
+            deduped.append(n)
+
+        return deduped
 
     def _transcribe_basic_pitch(self, audio_path: str) -> list[dict]:
         """Use Spotify's Basic Pitch for AMT."""
