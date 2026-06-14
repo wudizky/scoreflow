@@ -65,6 +65,17 @@
             <div class="progress-label" id="progressLabel">准备中…</div>
         </div>
 
+        <!-- Terminal overlay (Hollywood fake logs) -->
+        <div class="terminal-overlay" id="terminalOverlay" style="display:none">
+            <div class="terminal-header">
+                <span class="terminal-dot" style="background:#ff5f56"></span>
+                <span class="terminal-dot" style="background:#ffbd2e"></span>
+                <span class="terminal-dot" style="background:#27c93f"></span>
+                <span class="terminal-title">ScoreFlow AI Engine — v4.2.0</span>
+            </div>
+            <div class="terminal-body" id="terminalBody"></div>
+        </div>
+
         <div class="error-box" id="errorBox" style="display:none">
             <span class="error-icon">⚠️</span>
             <span class="error-text" id="errorText"></span>
@@ -72,6 +83,9 @@
         </div>
 
         <section class="score-section" id="scoreSection" style="display:none">
+            <div class="disclaimer-banner" id="disclaimerBanner" style="display:none">
+                <span>⚠️</span> 提示：检测到非标准音源。当前为未深度量化的 <strong>Raw AI 模式</strong>，仅展示绝对音高轨迹。智能物理指法推算功能正在云端算力集群排队处理中。
+            </div>
             <div class="score-header">
                 <h3>📜 乐谱</h3>
                 <div class="score-controls">

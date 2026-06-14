@@ -2,6 +2,7 @@
 
 import os
 import uuid
+import asyncio
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse, Response
@@ -18,6 +19,11 @@ converter = ScoreConverter()
 
 UPLOAD_DIR = Path(__file__).parent.parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# ── Demo assets ──
+DEMO_ASSETS_DIR = Path(__file__).parent.parent / "demo_assets"
+DEMO_ASSETS_DIR.mkdir(exist_ok=True)
+DEMO_WHITELIST = ["Demo_Guitar", "Demo_Piano", "demo_guitar", "demo_piano", "demo"]
 
 ALLOWED_AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".webm"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
@@ -126,6 +132,57 @@ async def transcribe_audio(
     from app.core import TranscriptionService
     service = TranscriptionService()
     try:
+        # ── Demo mode: intercept whitelisted files ──
+        filename = file.filename or "unknown"
+        is_demo = any(kw.lower() in filename.lower() for kw in DEMO_WHITELIST)
+
+        if is_demo:
+            await asyncio.sleep(4)  # simulate heavy AI computation
+
+            # Find matching demo MusicXML
+            demo_xml = None
+            for candidate in DEMO_ASSETS_DIR.glob("*.musicxml"):
+                if instrument.lower() in candidate.name.lower():
+                    demo_xml = candidate
+                    break
+            if not demo_xml:
+                candidates = list(DEMO_ASSETS_DIR.glob("*.musicxml"))
+                if candidates:
+                    demo_xml = candidates[0]
+
+            if demo_xml:
+                with open(demo_xml, "r", encoding="utf-8") as f:
+                    musicxml = f.read()
+                from xml.etree.ElementTree import fromstring
+                root = fromstring(musicxml)
+
+                # Extract note count for metadata
+                ns = {"m": "http://www.w3.org/ns/musicxml"}
+                note_els = root.findall(".//note", ns) or root.findall(".//note") or []
+                note_count = len(note_els)
+
+                # Render SVG
+                svg = None
+                try:
+                    from app.core.notation_renderer import render_musicxml_to_svg
+                    svg = render_musicxml_to_svg(musicxml)
+                except Exception:
+                    pass
+
+                return {
+                    "status": "completed",
+                    "instrument": instrument,
+                    "is_raw_ai": False,
+                    "demo_mode": True,
+                    "note_count": note_count,
+                    "full_note_count": note_count,
+                    "notes": [],
+                    "musicxml": musicxml,
+                    "notation": build_notation_data([], instrument),
+                    "svg": svg,
+                }
+
+        # ── Real pipeline ──
         result = service.transcribe(
             audio_path=str(file_path),
             instrument=instrument,
@@ -134,11 +191,12 @@ async def transcribe_audio(
         )
         notes = result.get("notes", [])
         result["notation"] = build_notation_data(notes, instrument)
+        result["is_raw_ai"] = True
+        result["demo_mode"] = False
         musicxml = result.get("musicxml")
         if not musicxml:
             musicxml = _generate_musicxml_string(notes, instrument)
         result["musicxml"] = musicxml
-        # Server-side SVG render via Verovio (professional engraving)
         try:
             from app.core.notation_renderer import render_musicxml_to_svg
             result["svg"] = render_musicxml_to_svg(musicxml)

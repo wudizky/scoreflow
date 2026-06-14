@@ -156,6 +156,54 @@ body {
 }
 .btn-sm:hover { background: var(--primary-light); }
 
+/* ── Terminal overlay ── */
+.terminal-overlay {
+    background: #0d1117;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,.18);
+    border: 1px solid #30363d;
+}
+.terminal-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+}
+.terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+.terminal-title { color: #8b949e; font-size: 0.75rem; margin-left: 6px; font-family: "SF Mono","Consolas","Monaco",monospace; }
+.terminal-body {
+    padding: 16px 20px;
+    min-height: 180px;
+    max-height: 340px;
+    overflow-y: auto;
+    font-family: "SF Mono","Consolas","Courier New",monospace;
+    font-size: 0.8rem;
+    line-height: 1.75;
+    color: #7ee787;
+    background: #0d1117;
+}
+.terminal-body .log-line { opacity: 0; animation: logFadeIn .3s ease forwards; }
+.terminal-body .log-line.dim { color: #8b949e; }
+.terminal-body .log-line.highlight { color: #79c0ff; font-weight: bold; }
+@keyframes logFadeIn { to { opacity: 1; } }
+
+/* ── Disclaimer banner ── */
+.disclaimer-banner {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 10px;
+    padding: 0.8rem 1.2rem;
+    margin-bottom: 1rem;
+    font-size: 0.82rem;
+    color: #92400e;
+    line-height: 1.5;
+}
+.disclaimer-banner span { margin-right: 0.4rem; }
+
 /* Demucs toggle */
 .demucs-toggle { text-align: center; margin-bottom: 1.2rem; }
 .toggle-label { cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-secondary); }
