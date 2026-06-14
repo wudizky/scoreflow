@@ -306,15 +306,14 @@ body {
     border-radius: 20px;
 }
 
-/* Scrollable score — Word-style bidirectional scroll */
+/* Scrollable score — vertical waterfall like PDF */
 .score-scroll {
     border: 1px solid var(--border);
     border-radius: 12px;
     background: #fffef9;
     padding: 2rem;
-    max-height: 70vh;
-    min-height: 320px;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: visible;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: #c4c4c4 transparent;
@@ -326,13 +325,14 @@ body {
 .score-scroll::-webkit-scrollbar-corner { background: transparent; }
 
 .score-render {
-    min-width: 600px;
     min-height: 160px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
-.score-render svg { max-width: 100%; }
+/* SVG fills container width, height auto-scales proportionally */
+.score-render svg {
+    width: 100% !important;
+    height: auto !important;
+    display: block;
+}
 
 /* Error */
 .error-box {

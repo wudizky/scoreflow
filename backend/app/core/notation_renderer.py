@@ -30,7 +30,7 @@ def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
         # ── Spacing ──
         "spacingLinear": 0.25,
         "spacingNonLinear": 0.6,
-        "spacingStaff": 6,
+        "spacingStaff": 8,
         "spacingSystem": 12,
         # ── Style ──
         "font": "Leipzig",
