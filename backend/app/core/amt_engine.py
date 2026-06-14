@@ -72,29 +72,46 @@ class AMTEngine:
     def _separate_stems(self, audio_path: str, instrument: str) -> Optional[str]:
         """Run Demucs source separation, return path to best stem.
 
-        Separating out drums/vocals before AMT dramatically reduces
-        ghost notes from percussive transients.
+        Runs in subprocess to avoid OOM killing the main server.
+        Falls back gracefully: if Demucs fails or is too slow,
+        transcription continues on the original audio.
         """
+        import subprocess, tempfile, pathlib
+
+        out_dir = tempfile.mkdtemp(prefix="demucs_")
         try:
-            from demucs import separate
-            import tempfile
+            # Use subprocess to isolate memory — if it OOMs, only the child dies
+            result = subprocess.run(
+                [
+                    "python3", "-m", "demucs",
+                    "--out", out_dir,
+                    "--two-stems", "drums",
+                    audio_path,
+                ],
+                capture_output=True,
+                timeout=120,                     # 2 min max for separation
+            )
 
-            out_dir = tempfile.mkdtemp(prefix="demucs_")
-            separate.main([
-                "--out", out_dir,
-                "--two-stems", "drums",  # Quick 2-stem: melody vs drums
-                audio_path,
-            ])
-
-            # Find the "no_drums" stem (or "other" if using full 4-stem)
-            import pathlib
             base = os.path.splitext(os.path.basename(audio_path))[0]
-            candidates = list(pathlib.Path(out_dir).rglob(f"**/{base}/no_drums.wav"))
-            if not candidates:
-                candidates = list(pathlib.Path(out_dir).rglob("*.wav"))
+            # Search for no_drums stem (2-stem) or other/model output
+            for pattern in [f"**/{base}/no_drums.wav", f"**/htdemucs/{base}/no_drums.wav", "**/*.wav"]:
+                candidates = list(pathlib.Path(out_dir).rglob(pattern))
+                if candidates:
+                    return str(candidates[0])
 
-            if candidates:
-                return str(candidates[0])
+        except FileNotFoundError:
+            # demucs CLI not installed
+            pass
+        except subprocess.TimeoutExpired:
+            # Too slow — skip separation
+            pass
+        except Exception:
+            pass
+
+        # Cleanup temp dir on failure
+        try:
+            import shutil
+            shutil.rmtree(out_dir, ignore_errors=True)
         except Exception:
             pass
 

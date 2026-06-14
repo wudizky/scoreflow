@@ -19,10 +19,10 @@ def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
     tk.setOptions({
         "scale": int(zoom * 55),
         # ── Layout: auto line-breaking ──
-        "breaks": "auto",           # Verovio decides where to break lines
-        "ignoreLayout": 1,          # Discard any MusicXML layout hints, re-layout fresh
-        "pageWidth": 2100,          # ~A4 width in Verovio units
-        "pageHeight": 60000,        # Very tall → single continuous page
+        "breaks": "auto",
+        "ignoreLayout": 1,
+        "pageWidth": 1200,           # 网页容器友好宽度
+        "adjustPageHeight": 1,       # 自适应高度，不写死！
         "pageMarginTop": 40,
         "pageMarginBottom": 40,
         "pageMarginLeft": 60,
@@ -31,12 +31,11 @@ def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
         "spacingLinear": 0.25,
         "spacingNonLinear": 0.6,
         "spacingStaff": 6,
-        "spacingSystem": 10,
+        "spacingSystem": 12,
         # ── Style ──
         "font": "Leipzig",
         "footer": "none",
         "header": "none",
-        "lyricSize": 4,
     })
     tk.loadData(musicxml)
     svg = tk.renderToSVG(1)
