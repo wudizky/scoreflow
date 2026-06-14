@@ -44,25 +44,44 @@ class MusicXMLGenerator:
             f.write(xml_str)
 
     def _group_into_measures(self, notes: list[dict]) -> list[list[dict]]:
-        """Group notes into measures (assuming 4/4, quarter=120)."""
+        """Group notes into measures (assuming 4/4, quarter=120).
+
+        Handles gaps in the music — creates explicit empty measures
+        for silence, and enforces a max-note density per measure so
+        Verovio has enough measure boundaries to break lines.
+        """
         if not notes:
             return [[]]
 
-        beat_duration = 60.0 / 120  # Quarter note duration in seconds
+        beat_duration = 60.0 / 120     # quarter = 0.5s
         beats_per_measure = 4
-        measure_duration = beats_per_measure * beat_duration
+        measure_duration = beats_per_measure * beat_duration  # 2.0s
 
         measures = []
         current_measure = []
         measure_start = 0
 
-        for note in notes:
-            if note["start"] >= measure_start + measure_duration:
+        for note in sorted(notes, key=lambda n: n.get("start", 0)):
+            start = note.get("start", 0)
+
+            # ── Handle gaps: advance to the correct measure ──
+            while start >= measure_start + measure_duration:
                 if current_measure:
                     measures.append(current_measure)
                     current_measure = []
+                else:
+                    # Explicit empty measure marker for silence
+                    measures.append([])
                 measure_start += measure_duration
+
             current_measure.append(note)
+
+            # ── Force break: if current measure gets too dense, split it ──
+            # (Verovio needs measure boundaries to line-break)
+            if len(current_measure) >= 64:
+                measures.append(current_measure)
+                current_measure = []
+                # Don't advance measure_start — keep same time window
 
         if current_measure:
             measures.append(current_measure)

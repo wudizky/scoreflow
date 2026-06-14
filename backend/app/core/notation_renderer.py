@@ -38,7 +38,17 @@ def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
         "header": "none",
     })
     tk.loadData(musicxml)
+
+    # Debug: verify measure count is reasonable
+    measure_count = musicxml.count("<measure number=")
+    if measure_count <= 1:
+        # Force at least some measure boundaries by setting breaks=auto
+        # If still only 1 measure, Verovio can't break — the XML is wrong
+        print(f"[notation_renderer] WARNING: only {measure_count} measure(s) in MusicXML — line breaking disabled", flush=True)
+
     svg = tk.renderToSVG(1)
+    svg_h_px = svg.count("height=")
+    print(f"[notation_renderer] Rendered SVG: {measure_count} measures, {len(svg)} bytes", flush=True)
     return svg
 
 
