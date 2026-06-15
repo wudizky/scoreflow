@@ -301,12 +301,11 @@ async def export_pdf(
 
     output_path = UPLOAD_DIR / f"score_{uuid.uuid4().hex[:8]}.pdf"
     try:
-        import cairosvg
-        cairosvg.svg2pdf(bytestring=svg_str.encode("utf-8"), write_to=str(output_path))
-    except ImportError:
-        raise HTTPException(status_code=500, detail="cairosvg not installed on server")
+        # Verovio renders PDF directly — no cairosvg needed
+        from app.core.notation_renderer import render_musicxml_to_pdf
+        render_musicxml_to_pdf(musicxml, str(output_path))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF conversion failed: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF failed: {str(e)[:200]}")
 
     return FileResponse(
         str(output_path),

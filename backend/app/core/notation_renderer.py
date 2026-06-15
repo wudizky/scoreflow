@@ -18,21 +18,17 @@ def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
     tk = verovio.toolkit()
     tk.setOptions({
         "scale": int(zoom * 55),
-        # ── Layout: auto line-breaking ──
         "breaks": "auto",
-        "ignoreLayout": 1,
-        "pageWidth": 1200,           # 网页容器友好宽度
-        "adjustPageHeight": 1,       # 自适应高度，不写死！
+        "pageWidth": 1200,
+        "adjustPageHeight": 1,
         "pageMarginTop": 40,
         "pageMarginBottom": 40,
         "pageMarginLeft": 60,
         "pageMarginRight": 60,
-        # ── Spacing ──
         "spacingLinear": 0.25,
         "spacingNonLinear": 0.6,
         "spacingStaff": 8,
         "spacingSystem": 12,
-        # ── Style ──
         "font": "Leipzig",
         "footer": "none",
         "header": "none",
@@ -50,6 +46,25 @@ def render_musicxml_to_svg(musicxml: str, zoom: float = 1.0) -> str:
     svg_h_px = svg.count("height=")
     print(f"[notation_renderer] Rendered SVG: {measure_count} measures, {len(svg)} bytes", flush=True)
     return svg
+
+
+def render_musicxml_to_pdf(musicxml: str, output_path: str, zoom: float = 1.0) -> None:
+    """Render MusicXML to PDF: Verovio SVG → rsvg-convert → PDF."""
+    import tempfile, subprocess
+    svg_str = render_musicxml_to_svg(musicxml, zoom)
+    svg_tmp = tempfile.mktemp(suffix=".svg")
+    try:
+        with open(svg_tmp, "w", encoding="utf-8") as f:
+            f.write(svg_str)
+        result = subprocess.run(
+            ["rsvg-convert", "-f", "pdf", "-o", output_path, svg_tmp],
+            capture_output=True, timeout=30,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode()[:200])
+    finally:
+        try: os.unlink(svg_tmp)
+        except OSError: pass
 
 
 def render_notes_to_svg(notes: list[dict], instrument: str, zoom: float = 1.0) -> str | None:
